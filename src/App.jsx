@@ -7,7 +7,6 @@ import { ArrowRight, Plus, Users, Trash2, Edit, LayoutDashboard, BarChart3, X, A
 // --- CONFIGURAZIONE FIREBASE ---
 const firebaseConfig = JSON.parse(import.meta.env.VITE_FIREBASE_CONFIG || '{}');
 const appId = firebaseConfig.projectId || 'default-gantt-app-master';
-
 // --- FUNZIONI UTILI ---
 const calculateDaysDifference = (d1, d2) => {
     if (!d1 || !d2) return 0;
@@ -22,7 +21,7 @@ const calculateDaysDifference = (d1, d2) => {
 const formatCurrency = (value) => new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(value || 0);
 
 const getContrastingTextColor = (hexcolor) => {
-    if (!hexcolor) return 'text-white';
+    if (!hexcolor) return 'text-gray-100';
     if (hexcolor.startsWith('#')) {
         hexcolor = hexcolor.slice(1);
     }
@@ -30,13 +29,13 @@ const getContrastingTextColor = (hexcolor) => {
         hexcolor = hexcolor.split('').map(char => char + char).join('');
     }
     if (hexcolor.length !== 6) {
-        return 'text-white';
+        return 'text-gray-100';
     }
     const r = parseInt(hexcolor.substr(0, 2), 16);
     const g = parseInt(hexcolor.substr(2, 2), 16);
     const b = parseInt(hexcolor.substr(4, 2), 16);
     const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
-    return (yiq >= 128) ? 'text-black' : 'text-white';
+    return (yiq >= 128) ? 'text-black' : 'text-gray-100';
 };
 
 
@@ -138,6 +137,7 @@ const TaskForm = ({ db, projects, task, resources, allTasks, onDone, selectedPro
     const [taskColor, setTaskColor] = useState(task ? task.taskColor : getProjectColor(projectId));
     const [assignedResources, setAssignedResources] = useState(task ? task.assignedResources || [] : []);
     const [dependencies, setDependencies] = useState(task ? task.dependencies || [] : []);
+    const [notes, setNotes] = useState(task ? task.notes || '' : '');
 
     useEffect(() => { if (!task) { setTaskColor(getProjectColor(projectId)); } }, [projectId, task, getProjectColor]);
     useEffect(() => { setDateWarning(checkDateWarning(endDate)); }, [endDate]);
@@ -156,7 +156,7 @@ const TaskForm = ({ db, projects, task, resources, allTasks, onDone, selectedPro
         }
     }, [dependencies, allTasks, startDate]);
 
-    const handleSubmit = async (e) => { e.preventDefault(); const taskData = { name, startDate, endDate, completionPercentage: Number(completionPercentage), dailyHours: Number(dailyHours), taskColor, assignedResources, dependencies, projectId }; try { if (task) { await updateDoc(doc(db, `/artifacts/${appId}/public/data/tasks`, task.id), taskData); } else { await addDoc(collection(db, `/artifacts/${appId}/public/data/tasks`), { ...taskData, order: allTasks.filter(t => t.projectId === projectId).length }); } onDone(); } catch (error) { console.error("Errore salvataggio task:", error); } };
+    const handleSubmit = async (e) => { e.preventDefault(); const taskData = { name, startDate, endDate, completionPercentage: Number(completionPercentage), dailyHours: Number(dailyHours), taskColor, assignedResources, dependencies, projectId, notes }; try { if (task) { await updateDoc(doc(db, `/artifacts/${appId}/public/data/tasks`, task.id), taskData); } else { await addDoc(collection(db, `/artifacts/${appId}/public/data/tasks`), { ...taskData, order: allTasks.filter(t => t.projectId === projectId).length }); } onDone(); } catch (error) { console.error("Errore salvataggio task:", error); } };
     const handleResourceToggle = (resourceId) => setAssignedResources(prev => prev.includes(resourceId) ? prev.filter(id => id !== resourceId) : [...prev, resourceId]);
     const handleDependencyToggle = (taskId) => setDependencies(prev => prev.includes(taskId) ? prev.filter(id => id !== taskId) : [...prev, taskId]);
 
@@ -170,6 +170,7 @@ const TaskForm = ({ db, projects, task, resources, allTasks, onDone, selectedPro
             {dateWarning && <div className="p-2 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 text-sm flex items-center gap-2"> <AlertTriangle size={16}/> {dateWarning}</div>}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4"> <div> <label className="block text-sm font-medium">Ore/giorno</label> <input type="number" min="1" max="24" value={dailyHours} onChange={e => setDailyHours(e.target.value)} className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md" /> </div> <div> <label className="block text-sm font-medium">Colore Attività</label> <input type="color" value={taskColor} onChange={e => setTaskColor(e.target.value)} className="mt-1 w-full h-10 p-1 border border-gray-300 rounded-md"/> </div> </div>
             <div> <label className="block text-sm font-medium">Completamento: {completionPercentage}%</label> <div className="flex items-center gap-2"> <input type="range" min="0" max="100" value={completionPercentage} onChange={e => setCompletionPercentage(e.target.value)} className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer" /> <input type="number" min="0" max="100" value={completionPercentage} onChange={e => setCompletionPercentage(e.target.value)} className="w-20 px-2 py-1 bg-white border border-gray-300 rounded-md" /> <button type="button" onClick={() => setCompletionPercentage(100)} className="bg-green-100 text-green-800 px-3 py-1 rounded-md text-sm hover:bg-green-200"><CheckCircle size={16}/></button></div> </div>
+            <div> <label className="block text-sm font-medium text-gray-700">Note</label> <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows="3" className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm" placeholder="Aggiungi note sull'attività..." /> </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4"> <div> <h4 className="text-sm font-medium mb-2">Predecessori</h4> <div className="max-h-32 overflow-y-auto border rounded-md p-2 space-y-1 bg-white"> {availableTasksForDependency.length > 0 ? availableTasksForDependency.map(t => ( <div key={t.id}> <label className="flex items-center space-x-2"> <input type="checkbox" checked={dependencies?.includes(t.id)} onChange={() => handleDependencyToggle(t.id)} className="rounded text-blue-500" /> <span>{t.name}</span> </label> </div> )) : <p className="text-xs text-gray-500">Nessuna altra attività.</p>} </div> </div> <div> <h4 className="text-sm font-medium mb-2">Risorse Assegnate</h4> <div className="max-h-32 overflow-y-auto border rounded-md p-2 space-y-1 bg-white"> {resources.map(res => ( <div key={res.id}> <label className="flex items-center space-x-2"> <input type="checkbox" checked={assignedResources?.includes(res.id)} onChange={() => handleResourceToggle(res.id)} className="rounded text-blue-500" /> <span>{res.name}</span> </label> </div> ))} </div> </div> </div>
             <div className="flex justify-end pt-4"> <button type="button" onClick={onDone} className="bg-gray-200 text-gray-800 px-4 py-2 rounded-md mr-2">Annulla</button> <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-md">Salva Attività</button> </div>
         </form>
@@ -290,7 +291,7 @@ const AssignmentReportView = ({ projectsWithData, resources, onExportPDF }) => {
                             </tbody>
                         </table>
                     </div>
-                 ))}
+                   ))}
             </div>
         </div>
     );
@@ -318,7 +319,7 @@ const CostReportView = ({ projectsWithData, onExportPDF }) => {
                     <thead className="bg-gray-50"><tr><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Attività</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Risorse</th><th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Costo Stimato</th><th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Costo Sostenuto</th></tr></thead>
                      <tbody className="bg-white divide-y divide-gray-200">
                         {projects.flatMap(project => [
-                            <tr key={project.id} className="bg-gray-100"><td colSpan="4" className="px-6 py-3 text-sm font-bold text-gray-900" style={{backgroundColor: project.color, color: 'white'}}><div className="flex justify-between"><span>{project.name}</span><span>{project.projectCompletionPercentage?.toFixed(1) || '0.0'}%</span></div></td></tr>,
+                            <tr key={project.id} className="bg-gray-100"><td colSpan="4" className={`px-6 py-3 text-sm font-bold ${getContrastingTextColor(project.color)}`} style={{backgroundColor: project.color}}><div className="flex justify-between"><span>{project.name}</span><span>{project.projectCompletionPercentage?.toFixed(1) || '0.0'}%</span></div></td></tr>,
                             ...(project.tasks.length > 0 ? project.tasks.map(task => ( <tr key={task.id}><td className="px-6 py-4 whitespace-nowrap"><p className="text-sm font-medium text-gray-900">{task.name}</p><p className="text-sm text-gray-500">{task.completionPercentage || 0}% completato</p></td><td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{task.assigned.map(r => r.name).join(', ') || 'N/A'}</td><td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">{formatCurrency(task.totalEstimatedCost)}</td><td className="px-6 py-4 whitespace-nowrap text-right text-sm">{formatCurrency(task.spentCost)}</td></tr> )) : [ <tr key={`${project.id}-empty`}><td colSpan="4" className="px-6 py-4 text-sm text-gray-500 italic">Nessuna attività.</td></tr> ]),
                             <tr key={`${project.id}-total`} className="bg-gray-50"><td colSpan="2" className="px-6 py-2 text-sm font-semibold text-right">Totale Progetto</td><td className="px-6 py-2 text-right text-sm font-semibold">{formatCurrency(project.projectTotalCost)}</td><td className="px-6 py-2 text-right text-sm font-semibold">{formatCurrency(project.projectSpentCost)}</td></tr>
                         ])}
@@ -335,9 +336,30 @@ const MainDashboard = ({ projects, tasks, resources, db, userId }) => {
     const [view, setView] = useState('gantt'); const [isLoading, setIsLoading] = useState(false); const [loadingMessage, setLoadingMessage] = useState(''); const [notification, setNotification] = useState({ message: '', type: 'info' }); const [isTaskModalOpen, setIsTaskModalOpen] = useState(false); const [isResourceModalOpen, setIsResourceModalOpen] = useState(false); const [isProjectModalOpen, setIsProjectModalOpen] = useState(false); const [editingTask, setEditingTask] = useState(null); const [editingProject, setEditingProject] = useState(null); const [isImportConfirmOpen, setIsImportConfirmOpen] = useState(false); const [importFile, setImportFile] = useState(null); const [selectedProjectId, setSelectedProjectId] = useState(null); const dragInfo = useRef({}); const fileInputRef = useRef(null);
     const [itemToDelete, setItemToDelete] = useState(null);
     const ganttContainerRef = useRef(null);
+    
+    // --- COSTANTI DI LAYOUT ---
+    const ROW_HEIGHT = 64; 
+    const DAY_WIDTH = 40; 
+    const PROJECT_HEADER_HEIGHT = 64;
+    const SIDEBAR_WIDTH = 384;
 
-    const projectsWithData = useMemo(() => {
-        if (!projects || !tasks || !resources) return [];
+    // --- Calcolo date e task ---
+    const { flatTasksSorted, overallStartDate, totalDays } = useMemo(() => { 
+        if (tasks.length === 0) return { flatTasksSorted: [], overallStartDate: new Date(), totalDays: 30 };
+        const startDates = tasks.map(t => new Date(t.startDate)); 
+        const endDates = tasks.map(t => new Date(t.endDate)); 
+        const minDate = new Date(Math.min(...startDates.filter(d => d && !isNaN(d)))); 
+        const maxDate = new Date(Math.max(...endDates.filter(d => d && !isNaN(d)))); 
+        if (!minDate || !maxDate || isNaN(minDate) || isNaN(maxDate)) return { flatTasksSorted: tasks, overallStartDate: new Date(), totalDays: 30 };
+        const diff = calculateDaysDifference(minDate, maxDate) + 5; 
+        return { flatTasksSorted: tasks, overallStartDate: minDate, totalDays: diff > 30 ? diff : 30 };
+    }, [tasks]);
+
+    const dateHeaders = useMemo(() => { const headers = []; let currentDate = new Date(overallStartDate); currentDate.setDate(currentDate.getDate() - 1); for (let i = 0; i < totalDays + 2; i++) { headers.push(new Date(currentDate)); currentDate.setDate(currentDate.getDate() + 1); } return headers; }, [overallStartDate, totalDays]);
+    
+    const { projectsWithData, taskPositions } = useMemo(() => {
+        if (!projects || !tasks || !resources || dateHeaders.length === 0) return { projectsWithData: [], taskPositions: new Map() };
+        
         const taskMap = {};
         tasks.forEach(task => { const startDate = new Date(task.startDate); const endDate = new Date(task.endDate); const duration = calculateDaysDifference(startDate, endDate) + 1; taskMap[task.id] = { ...task, startDate, endDate, duration: duration > 0 ? duration : 1 }; });
         for (let i = 0; i < tasks.length * 2; i++) {
@@ -353,10 +375,14 @@ const MainDashboard = ({ projects, tasks, resources, db, userId }) => {
             });
         }
         const processedTasks = Object.values(taskMap);
-        
-        return projects.map(p => { 
-            const projectTasks = processedTasks.filter(t => t.projectId === p.id);
+        const positions = new Map();
+        let currentY = 0;
+
+        const pWithData = projects.map(p => { 
+            const projectTasks = processedTasks.filter(t => t.projectId === p.id).sort((a,b) => (a.order || 0) - (b.order || 0));
             let totalDuration = 0; let weightedCompletion = 0; let projectTotalCost = 0; let projectSpentCost = 0; let projectTotalHours = 0; let projectWorkedHours = 0;
+            
+            currentY += PROJECT_HEADER_HEIGHT;
 
             const enrichedTasks = projectTasks.map(task => {
                 const duration = task.duration || 1;
@@ -375,18 +401,82 @@ const MainDashboard = ({ projects, tasks, resources, db, userId }) => {
                 projectSpentCost += spentCost;
                 projectTotalHours += totalTaskHours;
                 projectWorkedHours += workedHours;
+                
+                const taskTop = currentY;
+                positions.set(task.id, {
+                    top: taskTop,
+                    left: calculateDaysDifference(dateHeaders[0], task.startDate) * DAY_WIDTH,
+                    width: duration * DAY_WIDTH,
+                    height: ROW_HEIGHT,
+                });
+                currentY += ROW_HEIGHT;
 
                 return {...task, assigned, totalTaskHours, workedHours, totalEstimatedCost, spentCost };
             });
+            
+            if (projectTasks.length === 0) {
+                currentY += ROW_HEIGHT;
+            }
 
             const projectCompletionPercentage = totalDuration > 0 ? weightedCompletion / totalDuration : 0;
-            return { ...p, tasks: enrichedTasks.sort((a,b) => (a.order || 0) - (b.order || 0)), projectCompletionPercentage, projectTotalCost, projectSpentCost, projectTotalHours, projectWorkedHours };
+            return { ...p, tasks: enrichedTasks, projectCompletionPercentage, projectTotalCost, projectSpentCost, projectTotalHours, projectWorkedHours };
         }); 
-    }, [tasks, projects, resources]);
+        return { projectsWithData: pWithData, taskPositions: positions };
+    }, [tasks, projects, resources, dateHeaders]);
 
-    const flatTasksSorted = useMemo(() => projectsWithData.flatMap(p => p.tasks), [projectsWithData]);
-    const { overallStartDate, totalDays } = useMemo(() => { if (flatTasksSorted.length === 0) return { overallStartDate: new Date(), totalDays: 30 }; const startDates = flatTasksSorted.map(t => t.startDate); const endDates = flatTasksSorted.map(t => t.endDate); const minDate = new Date(Math.min(...startDates.filter(d => d && !isNaN(d)))); const maxDate = new Date(Math.max(...endDates.filter(d => d && !isNaN(d)))); if (!minDate || !maxDate || isNaN(minDate) || isNaN(maxDate)) return { overallStartDate: new Date(), totalDays: 30 }; const diff = calculateDaysDifference(minDate, maxDate) + 5; return { overallStartDate: minDate, totalDays: diff > 30 ? diff : 30 }; }, [flatTasksSorted]);
-    const dateHeaders = useMemo(() => { const headers = []; let currentDate = new Date(overallStartDate); currentDate.setDate(currentDate.getDate() - 1); for (let i = 0; i < totalDays + 2; i++) { headers.push(new Date(currentDate)); currentDate.setDate(currentDate.getDate() + 1); } return headers; }, [overallStartDate, totalDays]);
+    const arrowPaths = useMemo(() => {
+        const paths = [];
+        if (!tasks || taskPositions.size === 0) return paths;
+
+        tasks.forEach(task => {
+            if (task.dependencies && task.dependencies.length > 0) {
+                const successorPos = taskPositions.get(task.id);
+                if (!successorPos) return;
+
+                task.dependencies.forEach(predecessorId => {
+                    const predecessorPos = taskPositions.get(predecessorId);
+                    if (!predecessorPos) return;
+                    
+                    // The starting point Y is based on the predecessor's row center.
+                    // The total height of the header row is 48px (h-12).
+                    // Project header is 64px. Task rows are 64px.
+                    // The Y coordinate inside the SVG needs to account for the content above it.
+                    const headerAndProjectOffset = 48; // Sticky header height
+                    let predecessorY = headerAndProjectOffset;
+                    let successorY = headerAndProjectOffset;
+
+                    let predProjFound = false;
+                    let succProjFound = false;
+
+                    for(const proj of projectsWithData) {
+                        if(!predProjFound) predecessorY += PROJECT_HEADER_HEIGHT;
+                        if(!succProjFound) successorY += PROJECT_HEADER_HEIGHT;
+
+                        for(const t of proj.tasks){
+                            if(t.id === predecessorId) predProjFound = true;
+                            if(t.id === task.id) succProjFound = true;
+                            if(!predProjFound) predecessorY += ROW_HEIGHT;
+                            if(!succProjFound) successorY += ROW_HEIGHT;
+                        }
+                        if (proj.tasks.length === 0) {
+                           if(!predProjFound) predecessorY += ROW_HEIGHT;
+                           if(!succProjFound) successorY += ROW_HEIGHT;
+                        }
+                    }
+
+                    const startX = predecessorPos.left + predecessorPos.width;
+                    const startY = predecessorY - (ROW_HEIGHT / 2);
+                    const endX = successorPos.left;
+                    const endY = successorY - (ROW_HEIGHT / 2);
+
+                    const path = `M ${startX} ${startY} L ${startX + DAY_WIDTH / 2} ${startY} L ${startX + DAY_WIDTH / 2} ${endY} L ${endX} ${endY}`;
+                    paths.push({id: `${predecessorId}-${task.id}`, d: path});
+                });
+            }
+        });
+        return paths;
+    }, [tasks, taskPositions, projectsWithData]);
+
 
     const getResourceById = useCallback((id) => resources.find(r => r.id === id), [resources]);
     const handleEditTask = (task) => { setEditingTask(tasks.find(t=>t.id === task.id)); setIsTaskModalOpen(true); };
@@ -420,13 +510,12 @@ const MainDashboard = ({ projects, tasks, resources, db, userId }) => {
     };
     
     const handleDragStart = (e, task, type) => { e.dataTransfer.effectAllowed = 'move'; dragInfo.current = { taskId: task.id, type, initialX: e.clientX, initialStartDate: task.startDate, initialEndDate: task.endDate }; };
-    const handleGanttDrop = async (e) => { e.preventDefault(); const { taskId, type, initialX, initialStartDate, initialEndDate } = dragInfo.current; if (!taskId) return; const pixelsPerDay = 40; const dateOffset = Math.round((e.clientX - initialX) / pixelsPerDay); let newStartDate, newEndDate; const taskRef = doc(db, `/artifacts/${appId}/public/data/tasks`, taskId); if (type === 'move') { const duration = calculateDaysDifference(initialStartDate, initialEndDate); newStartDate = new Date(initialStartDate); newStartDate.setDate(newStartDate.getDate() + dateOffset); newEndDate = new Date(newStartDate); newEndDate.setDate(newEndDate.getDate() + duration); } else if (type === 'resize-end') { newStartDate = new Date(initialStartDate); newEndDate = new Date(initialEndDate); newEndDate.setDate(newEndDate.getDate() + dateOffset); if (newEndDate < newStartDate) newEndDate = newStartDate; } else if (type === 'resize-start') { newEndDate = new Date(initialEndDate); newStartDate = new Date(initialStartDate); newStartDate.setDate(newStartDate.getDate() + dateOffset); if (newStartDate > newEndDate) newStartDate = newEndDate; } else { return; } try { await updateDoc(taskRef, { startDate: newStartDate.toISOString().split('T')[0], endDate: newEndDate.toISOString().split('T')[0] }); } catch(error) { console.error("Errore aggiornamento task:", error); } dragInfo.current = {}; };
+    const handleGanttDrop = async (e) => { e.preventDefault(); const { taskId, type, initialX, initialStartDate, initialEndDate } = dragInfo.current; if (!taskId) return; const pixelsPerDay = DAY_WIDTH; const dateOffset = Math.round((e.clientX - initialX) / pixelsPerDay); let newStartDate, newEndDate; const taskRef = doc(db, `/artifacts/${appId}/public/data/tasks`, taskId); if (type === 'move') { const duration = calculateDaysDifference(initialStartDate, initialEndDate); newStartDate = new Date(initialStartDate); newStartDate.setDate(newStartDate.getDate() + dateOffset); newEndDate = new Date(newStartDate); newEndDate.setDate(newEndDate.getDate() + duration); } else if (type === 'resize-end') { newStartDate = new Date(initialStartDate); newEndDate = new Date(initialEndDate); newEndDate.setDate(newEndDate.getDate() + dateOffset); if (newEndDate < newStartDate) newEndDate = newStartDate; } else if (type === 'resize-start') { newEndDate = new Date(initialEndDate); newStartDate = new Date(initialStartDate); newStartDate.setDate(newStartDate.getDate() + dateOffset); if (newStartDate > newEndDate) newStartDate = newEndDate; } else { return; } try { await updateDoc(taskRef, { startDate: newStartDate.toISOString().split('T')[0], endDate: newEndDate.toISOString().split('T')[0] }); } catch(error) { console.error("Errore aggiornamento task:", error); } dragInfo.current = {}; };
     const exportData = () => { const dataToExport = { projects, tasks, resources, exportedAt: new Date().toISOString() }; const dataStr = JSON.stringify(dataToExport, null, 2); const blob = new Blob([dataStr], {type: "application/json"}); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `project_data_backup_${new Date().toISOString().split('T')[0]}.json`; document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url); setNotification({message: "Esportazione completata.", type: "success"}); };
     const handleFileImportChange = (e) => { const file = e.target.files[0]; if (file) { setImportFile(file); setIsImportConfirmOpen(true); } e.target.value = null; };
     const importData = async () => { if (!importFile) return; setIsLoading(true); setLoadingMessage("Importazione in corso..."); const reader = new FileReader(); reader.onload = async (e) => { try { const data = JSON.parse(e.target.result); if (!data.projects || !data.tasks || !data.resources) { throw new Error("Formato file non valido."); } setLoadingMessage("Cancellazione dati esistenti..."); const collectionsToDelete = ['tasks', 'resources', 'projects']; for (const coll of collectionsToDelete) { const snapshot = await getDocs(collection(db, `/artifacts/${appId}/public/data/${coll}`)); const batch = writeBatch(db); snapshot.docs.forEach(d => batch.delete(d.ref)); await batch.commit(); } setLoadingMessage("Importazione nuovi dati..."); const importBatch = writeBatch(db); data.projects.forEach(p => importBatch.set(doc(db, `/artifacts/${appId}/public/data/projects`, p.id), p)); data.tasks.forEach(t => importBatch.set(doc(db, `/artifacts/${appId}/public/data/tasks`, t.id), t)); data.resources.forEach(r => importBatch.set(doc(db, `/artifacts/${appId}/public/data/resources`, r.id), r)); await importBatch.commit(); setNotification({message: "Importazione completata con successo!", type: "success"}); } catch (error) { console.error("Errore durante l'importazione:", error); setNotification({message: `Errore importazione: ${error.message}`, type: "error"}); } finally { setIsLoading(false); setImportFile(null); setIsImportConfirmOpen(false); } }; reader.readAsText(importFile); };
     const exportToPDF = (reportType) => { const { jsPDF } = window.jspdf; if (typeof jsPDF === 'undefined' || (reportType==='gantt' && typeof window.html2canvas === 'undefined')) { alert("Libreria PDF non ancora caricata. Riprova tra un momento."); return; } setIsLoading(true); setLoadingMessage(`Esportazione ${reportType}...`); const timestamp = new Date().toLocaleString('sv-SE').replace(/ /g, '_').replace(/:/g, '-'); if(reportType === 'cost' || reportType === 'activity' || reportType === 'assignment') { const content = document.getElementById(`${reportType}-report-content`); const title = reportType === 'cost' ? 'Report Costi' : reportType === 'activity' ? 'Report Attività' : 'Report Assegnazioni'; const doc = new jsPDF(); doc.autoTable({ html: `#${reportType}-report-content table`, startY: 20, didParseCell: function(data) { if (data.cell.raw.nodeName === 'TD') { data.cell.styles.fontStyle = 'normal'; data.cell.styles.halign = data.cell.raw.style.textAlign || 'left'; } if (data.cell.raw.nodeName === 'TH') { data.cell.styles.fontStyle = 'bold'; } } }); doc.text(title, 14, 15); doc.save(`report_${reportType}_${timestamp}.pdf`); setIsLoading(false); } else if (reportType === 'gantt') { const ganttElement = ganttContainerRef.current; window.html2canvas(ganttElement, { useCORS: true, scale: 1.5, width: ganttElement.scrollWidth, height: ganttElement.scrollHeight, windowWidth: ganttElement.scrollWidth, windowHeight: ganttElement.scrollHeight, }).then(canvas => { const imgData = canvas.toDataURL('image/png'); const imgWidth = 280; const pageHeight = 190; const imgHeight = canvas.height * imgWidth / canvas.width; let heightLeft = imgHeight; const doc = new jsPDF('l', 'mm', 'a4'); let position = 10; doc.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight); heightLeft -= pageHeight; while (heightLeft > 0) { position = heightLeft - imgHeight + 10; doc.addPage(); doc.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight); heightLeft -= pageHeight; } doc.save(`gantt_chart_${timestamp}.pdf`); setIsLoading(false); }).catch(() => setIsLoading(false)); } };
     
-    const ROW_HEIGHT = 64; const DAY_WIDTH = 40; const PROJECT_HEADER_HEIGHT = 64;
     const today = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d; }, []);
     const todayMarkerPosition = useMemo(() => { if (dateHeaders.length === 0) return -1; const ganttStartDate = dateHeaders[0]; return calculateDaysDifference(ganttStartDate, today) * DAY_WIDTH; }, [dateHeaders, today]);
 
@@ -438,8 +527,50 @@ const MainDashboard = ({ projects, tasks, resources, db, userId }) => {
                 <div className="flex items-center gap-4"> <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1> <div className="flex items-center gap-1 rounded-lg bg-gray-200 p-1"> <button onClick={() => setView('gantt')} className={`px-2 py-1 text-sm font-medium rounded-md flex items-center gap-1 ${view==='gantt' ? 'bg-white shadow' : 'text-gray-600'}`}><LayoutDashboard size={16}/> Gantt</button> <button onClick={() => setView('assignmentReport')} className={`px-2 py-1 text-sm font-medium rounded-md flex items-center gap-1 ${view==='assignmentReport' ? 'bg-white shadow' : 'text-gray-600'}`}><ClipboardList size={16}/> Assegnazioni</button> <button onClick={() => setView('activityReport')} className={`px-2 py-1 text-sm font-medium rounded-md flex items-center gap-1 ${view==='activityReport' ? 'bg-white shadow' : 'text-gray-600'}`}><BarChart3 size={16}/> Attività</button> <button onClick={() => setView('costReport')} className={`px-2 py-1 text-sm font-medium rounded-md flex items-center gap-1 ${view==='costReport' ? 'bg-white shadow' : 'text-gray-600'}`}><BarChart3 size={16}/> Costi</button> </div> </div>
                 <div className="flex items-center gap-2 flex-wrap"> <button onClick={exportData} className="bg-gray-600 text-white px-3 py-2 rounded-md hover:bg-gray-700 flex items-center gap-2 text-sm"><FileDown size={16}/> Esporta Dati</button> <button onClick={() => fileInputRef.current.click()} className="bg-gray-600 text-white px-3 py-2 rounded-md hover:bg-gray-700 flex items-center gap-2 text-sm"><FileUp size={16}/> Importa Dati</button> <input type="file" ref={fileInputRef} onChange={handleFileImportChange} accept=".json" className="hidden"/> <button onClick={handleOpenNewProjectModal} className="bg-purple-600 text-white px-3 py-2 rounded-md hover:bg-purple-700 flex items-center gap-2 text-sm"> <Plus size={16} /> Progetto </button> <button onClick={() => setIsResourceModalOpen(true)} className="bg-yellow-500 text-white px-3 py-2 rounded-md hover:bg-yellow-600 flex items-center gap-2 text-sm"> <Users size={16} /> Risorse </button> <button onClick={() => { setEditingTask(null); setIsTaskModalOpen(true); }} className="bg-blue-500 text-white px-3 py-2 rounded-md hover:bg-blue-600 flex items-center gap-2 text-sm"> <Plus size={16} /> Attività </button> </div>
             </header>
-            <main className="flex-grow overflow-hidden">
-                {view === 'gantt' ? ( <div className="h-full w-full overflow-auto" ref={ganttContainerRef}> <div className="relative" style={{ width: `${384 + dateHeaders.length * DAY_WIDTH}px`, minHeight: '100%' }}> <div className="sticky top-0 z-30 flex h-12 bg-white"><div className="w-96 sticky left-0 bg-gray-100 z-10 flex items-center justify-between px-4 border-b border-r"><span className="font-semibold text-gray-700">Progetti</span><button onClick={() => exportToPDF('gantt')} className="text-blue-600 hover:text-blue-800 p-1"><FileDown size={18}/></button></div><div className="flex">{dateHeaders.map((date) => { const isToday = date.toDateString() === today.toDateString(); return (<div key={date.toISOString()} className={`w-10 text-center border-r border-b flex-shrink-0 flex flex-col justify-center ${isToday ? 'bg-red-200' : 'bg-gray-50'}`}><div className={`text-xs ${date.getDay() === 0 || date.getDay() === 6 ? 'text-red-500' : 'text-gray-500'}`}>{['D', 'L', 'M', 'M', 'G', 'V', 'S'][date.getDay()]}</div><div className={`text-sm font-semibold ${isToday ? 'text-red-600' : 'text-gray-800'}`}>{date.getDate()}</div></div>)})}</div></div><div className="relative"><div className="absolute top-0 left-0 h-full w-full pointer-events-none"><div className="absolute top-0 bottom-0 w-0.5 bg-red-500 opacity-75 z-20" style={{ left: `${384 + todayMarkerPosition}px`}}></div></div>{projectsWithData.map((project, projIndex) => (<div key={project.id} className="group/project relative"><div onClick={() => setSelectedProjectId(project.id)} className={`flex items-center justify-between p-2 px-4 sticky left-0 z-10 cursor-pointer transition-all border-b border-r ${selectedProjectId === project.id ? 'bg-blue-200 border-l-4 border-blue-600' : 'bg-gray-200'}`} style={{minHeight: `${PROJECT_HEADER_HEIGHT}px`, width: '384px'}}><div className="flex items-center gap-3 flex-grow"><span className="w-4 h-4 rounded-full flex-shrink-0" style={{backgroundColor: project.color}}></span> <div className="flex-grow"><h3 className="font-bold text-gray-800">{project.name}</h3> <div className="w-full bg-gray-300 rounded-full h-1.5 mt-1"><div className="bg-green-500 h-1.5 rounded-full" style={{width: `${project.projectCompletionPercentage.toFixed(0)}%`}}></div></div><span className="text-xs text-gray-500">{project.projectCompletionPercentage.toFixed(1)}%</span></div></div><div className="flex items-center gap-2 flex-shrink-0 opacity-0 group-hover/project:opacity-100 transition-opacity"><button onClick={(e) => {e.stopPropagation(); handleEditProject(project)}} className="text-gray-500 hover:text-blue-600"><Edit size={16}/></button><button onClick={(e) => {e.stopPropagation(); confirmDeleteItem(project, 'project')}} className="text-gray-500 hover:text-red-600"><Trash2 size={16}/></button></div></div>{project.tasks.map(task => (<div key={task.id} className="flex border-b border-gray-200 relative" style={{height: `${ROW_HEIGHT}px`}} onDoubleClick={() => handleEditTask(task)}><div className="sticky left-0 w-96 z-10 bg-gray-50 flex items-center group/task p-2 pl-9 border-r"><div className="flex-grow"><p className="font-medium text-gray-800">{task.name}</p><div className="flex flex-wrap gap-1 mt-1">{task.assignedResources?.map(resId => { const r = getResourceById(resId); return r ? <span key={resId} className="text-xs bg-gray-200 text-gray-800 px-1.5 py-0.5 rounded-full">{r.name}</span> : null; })}</div></div><div className="flex items-center opacity-0 group-hover/task:opacity-100 transition-opacity"><button onClick={(e) => {e.stopPropagation(); confirmDeleteItem(task, 'task')}} className="p-1 text-gray-500 hover:text-red-600"><Trash2 size={16}/></button></div></div><div className="absolute flex items-center" style={{ top: 0, height: '100%', left: `${384 + calculateDaysDifference(dateHeaders[0], task.startDate) * DAY_WIDTH}px`, width: `${task.duration * DAY_WIDTH}px` }}><div draggable onDragStart={(e) => handleDragStart(e, task, 'move')} className="h-8 rounded-md shadow-sm flex items-center w-full group relative" style={{ backgroundColor: task.taskColor || project.color || '#3b82f6' }}><div className="absolute top-0 left-0 h-full rounded-l-md" style={{width: `${task.completionPercentage || 0}%`, backgroundColor: 'rgba(0,0,0,0.2)'}}></div><div className={`absolute px-2 text-sm truncate font-medium z-10 ${getContrastingTextColor(task.taskColor || project.color)}`}>{task.name}</div><div draggable onDragStart={(e) => { e.stopPropagation(); handleDragStart(e, task, 'resize-start'); }} className="absolute left-0 top-0 w-2 h-full cursor-ew-resize z-20" /><div draggable onDragStart={(e) => { e.stopPropagation(); handleDragStart(e, task, 'resize-end'); }} className="absolute right-0 top-0 w-2 h-full cursor-ew-resize z-20" /></div></div></div>))} {project.tasks.length === 0 && <div className="sticky left-0 w-96 bg-gray-50 border-r border-b" style={{height: `${ROW_HEIGHT}px`}}><div className="pl-9 text-xs text-gray-500 italic h-full flex items-center">Nessuna attività.</div></div>}</div>))}</div></div></div>
+            <main className="flex-grow overflow-auto">
+                {view === 'gantt' ? ( <div className="h-full w-full overflow-auto" ref={ganttContainerRef} onDrop={handleGanttDrop} onDragOver={e => e.preventDefault()}> <div className="relative" style={{ width: `${SIDEBAR_WIDTH + dateHeaders.length * DAY_WIDTH}px`, minHeight: '100%' }}> <div className="sticky top-0 z-30 flex h-12 bg-white"><div className="w-96 sticky left-0 bg-gray-100 z-10 flex items-center justify-between px-4 border-b border-r"><span className="font-semibold text-gray-700">Progetti</span><button onClick={() => exportToPDF('gantt')} className="text-blue-600 hover:text-blue-800 p-1"><FileDown size={18}/></button></div><div className="flex">{dateHeaders.map((date) => { const isToday = date.toDateString() === today.toDateString(); return (<div key={date.toISOString()} className={`w-10 text-center border-r border-b flex-shrink-0 flex flex-col justify-center ${isToday ? 'bg-red-200' : 'bg-gray-50'}`}><div className={`text-xs ${date.getDay() === 0 || date.getDay() === 6 ? 'text-red-500' : 'text-gray-500'}`}>{['D', 'L', 'M', 'M', 'G', 'V', 'S'][date.getDay()]}</div><div className={`text-sm font-semibold ${isToday ? 'text-red-600' : 'text-gray-800'}`}>{date.getDate()}</div></div>)})}</div></div>
+                <svg className="absolute top-12 left-0 w-full h-full pointer-events-none z-20" style={{marginLeft: `${SIDEBAR_WIDTH}px`}}>
+                    <defs>
+                        <marker id="arrowhead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                            <path d="M 0 0 L 10 5 L 0 10 z" fill="#0ea5e9" />
+                        </marker>
+                    </defs>
+                    {arrowPaths.map(path => (
+                         <path key={path.id} d={path.d} stroke="#0ea5e9" strokeWidth="2" fill="none" markerEnd="url(#arrowhead)" />
+                    ))}
+                </svg>
+                <div className="relative">
+                    <div className="absolute top-0 left-0 h-full w-full pointer-events-none"><div className="absolute top-0 bottom-0 w-0.5 bg-red-500 opacity-75 z-20" style={{ left: `${SIDEBAR_WIDTH + todayMarkerPosition}px`}}></div></div>
+                    {projectsWithData.map((project, projIndex) => (
+                    <div key={project.id} className="group/project relative">
+                        <div onClick={() => setSelectedProjectId(project.id)} className={`flex items-center justify-between p-2 px-4 sticky left-0 z-10 cursor-pointer transition-all border-b border-r ${selectedProjectId === project.id ? 'bg-blue-200 border-l-4 border-blue-600' : 'bg-gray-200'}`} style={{height: `${PROJECT_HEADER_HEIGHT}px`, width: `${SIDEBAR_WIDTH}px`}}>
+                           <div className="flex items-center gap-3 flex-grow overflow-hidden"><span className="w-4 h-4 rounded-full flex-shrink-0" style={{backgroundColor: project.color}}></span> <div className="flex-grow overflow-hidden"><h3 className="font-bold text-gray-800 truncate">{project.name}</h3> <div className="w-full bg-gray-300 rounded-full h-1.5 mt-1"><div className="bg-green-500 h-1.5 rounded-full" style={{width: `${project.projectCompletionPercentage.toFixed(0)}%`}}></div></div><span className="text-xs text-gray-500">{project.projectCompletionPercentage.toFixed(1)}%</span></div></div><div className="flex items-center gap-2 flex-shrink-0 opacity-0 group-hover/project:opacity-100 transition-opacity"><button onClick={(e) => {e.stopPropagation(); handleEditProject(project)}} className="text-gray-500 hover:text-blue-600"><Edit size={16}/></button><button onClick={(e) => {e.stopPropagation(); confirmDeleteItem(project, 'project')}} className="text-gray-500 hover:text-red-600"><Trash2 size={16}/></button></div>
+                        </div>
+                        {project.tasks.map(task => {
+                            const pos = taskPositions.get(task.id);
+                            return (
+                                <div key={task.id} className="flex border-b border-gray-200 relative" style={{height: `${ROW_HEIGHT}px`}} onDoubleClick={() => handleEditTask(task)}>
+                                    <div className="sticky left-0 w-96 z-10 bg-gray-50 flex items-center group/task p-2 pl-9 border-r">
+                                        <div className="flex-grow overflow-hidden"><p className="font-medium text-gray-900 truncate">{task.name}</p><div className="flex flex-wrap gap-1 mt-1">{task.assignedResources?.map(resId => { const r = getResourceById(resId); return r ? <span key={resId} className="text-xs bg-gray-200 text-gray-800 px-1.5 py-0.5 rounded-full">{r.name}</span> : null; })}</div></div>
+                                        <div className="flex items-center opacity-0 group-hover/task:opacity-100 transition-opacity">
+                                            <button onClick={(e) => {e.stopPropagation(); handleEditTask(task)}} className="p-1 text-gray-500 hover:text-blue-600"><Edit size={16}/></button>
+                                            <button onClick={(e) => {e.stopPropagation(); confirmDeleteItem(task, 'task')}} className="p-1 text-gray-500 hover:text-red-600"><Trash2 size={16}/></button>
+                                        </div>
+                                    </div>
+                                    {pos && <div className="absolute flex items-center" style={{ top: 0, height: '100%', left: `${SIDEBAR_WIDTH + pos.left}px`, width: `${pos.width}px` }}>
+                                        <div draggable onDragStart={(e) => handleDragStart(e, task, 'move')} className="h-8 rounded-md shadow-sm flex items-center w-full group relative" style={{ backgroundColor: task.taskColor || project.color || '#3b82f6' }} title={task.notes}>
+                                            <div className="absolute top-0 left-0 h-full rounded-l-md" style={{width: `${task.completionPercentage || 0}%`, backgroundColor: 'rgba(0,0,0,0.2)'}}></div>
+                                            <div className={`absolute px-2 text-sm truncate font-medium z-10 ${getContrastingTextColor(task.taskColor || project.color)}`}>{task.name}</div>
+                                            <div draggable onDragStart={(e) => { e.stopPropagation(); handleDragStart(e, task, 'resize-start'); }} className="absolute left-0 top-0 w-2 h-full cursor-ew-resize z-20" />
+                                            <div draggable onDragStart={(e) => { e.stopPropagation(); handleDragStart(e, task, 'resize-end'); }} className="absolute right-0 top-0 w-2 h-full cursor-ew-resize z-20" />
+                                        </div>
+                                    </div>}
+                                </div>
+                            )
+                        })} 
+                        {project.tasks.length === 0 && <div className="sticky left-0 w-96 bg-gray-50 border-r border-b" style={{height: `${ROW_HEIGHT}px`}}><div className="pl-9 text-xs text-gray-500 italic h-full flex items-center">Nessuna attività.</div></div>}
+                    </div>
+                ))}</div></div></div>
                 ) : view === 'costReport' ? ( <CostReportView projectsWithData={projectsWithData} onExportPDF={() => exportToPDF('cost')} />
                 ) : view === 'assignmentReport' ? ( <AssignmentReportView projectsWithData={projectsWithData} resources={resources} onExportPDF={() => exportToPDF('assignment')} /> )
                 : ( <ActivityReportView projectsWithData={projectsWithData} onExportPDF={() => exportToPDF('activity')} /> )
