@@ -7,6 +7,7 @@ import { ArrowRight, Plus, Users, Trash2, Edit, LayoutDashboard, BarChart3, X, A
 // --- CONFIGURAZIONE FIREBASE ---
 const firebaseConfig = JSON.parse(import.meta.env.VITE_FIREBASE_CONFIG || '{}');
 const appId = firebaseConfig.projectId || 'default-gantt-app-master';
+
 // --- FUNZIONI UTILI ---
 const calculateDaysDifference = (d1, d2) => {
     if (!d1 || !d2) return 0;
@@ -59,7 +60,7 @@ const checkDateWarning = (date) => {
     return null;
 };
 
-// --- COMPONENTI UI ---
+// --- COMPONENTI UI GENERICI ---
 const Loader = ({ message }) => (
     <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex flex-col justify-center items-center">
         <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-white"></div>
@@ -94,26 +95,25 @@ const DatePicker = ({ value, onChange, ...props }) => {
 };
 
 // --- COMPONENTI SPECIFICI ---
-
 const ResourceManagement = ({ resources, db }) => {
-  const [editingResource, setEditingResource] = useState(null);
-  const [name, setName] = useState('');
-  const [company, setCompany] = useState('');
-  const [notes, setNotes] = useState('');
-  const [hourlyCost, setHourlyCost] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
+    const [editingResource, setEditingResource] = useState(null);
+    const [name, setName] = useState('');
+    const [company, setCompany] = useState('');
+    const [notes, setNotes] = useState('');
+    const [hourlyCost, setHourlyCost] = useState('');
+    const [email, setEmail] = useState('');
+    const [phone, setPhone] = useState('');
+    const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+    const [resourceToDelete, setResourceToDelete] = useState(null);
 
-  const uniqueCompanies = useMemo(() => [...new Set(resources.map(r => r.company).filter(Boolean))], [resources]);
-  const resetForm = () => { setEditingResource(null); setName(''); setCompany(''); setNotes(''); setHourlyCost(''); setEmail(''); setPhone(''); };
-  const handleEdit = (resource) => { setEditingResource(resource); setName(resource.name); setCompany(resource.company || ''); setNotes(resource.notes || ''); setHourlyCost(resource.hourlyCost || ''); setEmail(resource.email || ''); setPhone(resource.phone || ''); };
-  const handleSubmit = async () => { if (name.trim() === '') return; const resourceData = { name: name.trim(), company: company.trim(), notes: notes.trim(), hourlyCost: Number(hourlyCost) || 0, email: email.trim(), phone: phone.trim() }; try { if (editingResource) { await updateDoc(doc(db, `/artifacts/${appId}/public/data/resources`, editingResource.id), resourceData); } else { await addDoc(collection(db, `/artifacts/${appId}/public/data/resources`), resourceData); } resetForm(); } catch (error) { console.error("Errore salvataggio risorsa:", error); } };
-  const confirmDelete = (id) => { setResourceToDelete(id); setIsConfirmOpen(true); };
-  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
-  const [resourceToDelete, setResourceToDelete] = useState(null);
-  const deleteResource = async () => { if (!resourceToDelete) return; try { await deleteDoc(doc(db, `/artifacts/${appId}/public/data/resources`, resourceToDelete)); } catch (error) { console.error("Errore eliminazione risorsa:", error); } finally { setIsConfirmOpen(false); setResourceToDelete(null); } };
+    const uniqueCompanies = useMemo(() => [...new Set(resources.map(r => r.company).filter(Boolean))], [resources]);
+    const resetForm = () => { setEditingResource(null); setName(''); setCompany(''); setNotes(''); setHourlyCost(''); setEmail(''); setPhone(''); };
+    const handleEdit = (resource) => { setEditingResource(resource); setName(resource.name); setCompany(resource.company || ''); setNotes(resource.notes || ''); setHourlyCost(resource.hourlyCost || ''); setEmail(resource.email || ''); setPhone(resource.phone || ''); };
+    const handleSubmit = async () => { if (name.trim() === '') return; const resourceData = { name: name.trim(), company: company.trim(), notes: notes.trim(), hourlyCost: Number(hourlyCost) || 0, email: email.trim(), phone: phone.trim() }; try { if (editingResource) { await updateDoc(doc(db, `/artifacts/${appId}/public/data/resources`, editingResource.id), resourceData); } else { await addDoc(collection(db, `/artifacts/${appId}/public/data/resources`), resourceData); } resetForm(); } catch (error) { console.error("Errore salvataggio risorsa:", error); } };
+    const confirmDelete = (id) => { setResourceToDelete(id); setIsConfirmOpen(true); };
+    const deleteResource = async () => { if (!resourceToDelete) return; try { await deleteDoc(doc(db, `/artifacts/${appId}/public/data/resources`, resourceToDelete)); } catch (error) { console.error("Errore eliminazione risorsa:", error); } finally { setIsConfirmOpen(false); setResourceToDelete(null); } };
 
-  return ( <> <Modal isOpen={isConfirmOpen} onClose={() => setIsConfirmOpen(false)} title="Conferma Eliminazione"> <div> <p>Sei sicuro di voler eliminare questa risorsa?</p> <div className="flex justify-end mt-4"> <button onClick={() => setIsConfirmOpen(false)} className="bg-gray-300 text-gray-800 px-4 py-2 rounded-md mr-2">Annulla</button> <button onClick={deleteResource} className="bg-red-600 text-white px-4 py-2 rounded-md">Elimina</button> </div> </div> </Modal> <div> <h4 className="text-lg font-medium text-gray-700 mb-3">{editingResource ? 'Modifica Risorsa' : 'Aggiungi Risorsa'}</h4> <div className="space-y-4 p-4 border rounded-md bg-gray-50 mb-6"> <div className="grid grid-cols-1 md:grid-cols-2 gap-4"> <div> <label className="block text-sm font-medium text-gray-700">Nome Risorsa</label> <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Mario Rossi" className="mt-1 block w-full px-3 py-2 border-gray-300 rounded-md shadow-sm" required/> </div> <div> <label className="block text-sm font-medium text-gray-700">Società</label> <input type="text" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Acme Inc." className="mt-1 block w-full px-3 py-2 border-gray-300 rounded-md shadow-sm" list="companies-datalist" /> <datalist id="companies-datalist">{uniqueCompanies.map(c => <option key={c} value={c} />)}</datalist> </div> <div> <label className="block text-sm font-medium text-gray-700">Email</label> <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="mario.rossi@example.com" className="mt-1 block w-full px-3 py-2 border-gray-300 rounded-md shadow-sm" /> </div> <div> <label className="block text-sm font-medium text-gray-700">Telefono</label> <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+39 333 1234567" className="mt-1 block w-full px-3 py-2 border-gray-300 rounded-md shadow-sm" /> </div> <div> <label className="block text-sm font-medium text-gray-700">Costo Orario (€)</label> <input type="number" value={hourlyCost} onChange={(e) => setHourlyCost(e.target.value)} placeholder="50" className="mt-1 block w-full px-3 py-2 border-gray-300 rounded-md shadow-sm" /> </div> </div> <div> <label className="block text-sm font-medium text-gray-700">Note</label> <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Specializzazione, contatto, etc." rows="2" className="mt-1 block w-full px-3 py-2 border-gray-300 rounded-md shadow-sm"></textarea> </div> <div className="flex justify-end items-center gap-4"> {editingResource && (<button onClick={resetForm} className="text-sm text-gray-600 hover:underline">Annulla modifica</button>)} <button onClick={handleSubmit} className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 flex items-center gap-2"> <Plus size={16} /> {editingResource ? 'Salva Modifiche' : 'Aggiungi Risorsa'} </button> </div> </div> <h4 className="text-lg font-medium text-gray-700 mb-3">Elenco Risorse</h4> <div className="space-y-2 max-h-60 overflow-y-auto"> {resources.map(res => ( <div key={res.id} className="bg-white p-3 rounded-md border flex items-start justify-between"> <div className="flex-grow"> <p className="font-semibold text-gray-900">{res.name} <span className="text-sm font-normal text-gray-600">({formatCurrency(res.hourlyCost || 0)}/h)</span></p> {res.company && <p className="text-sm text-blue-700">{res.company}</p>} {res.email && <p className="text-sm text-gray-600">{res.email}</p>} {res.phone && <p className="text-sm text-gray-600">{res.phone}</p>} {res.notes && <p className="text-xs text-gray-500 mt-1">{res.notes}</p>} </div> <div className="flex-shrink-0 flex gap-2 ml-4"> <button onClick={() => handleEdit(res)} className="text-blue-600 hover:text-blue-800"><Edit size={16} /></button> <button onClick={() => confirmDelete(res.id)} className="text-red-500 hover:text-red-700"><Trash2 size={16} /></button> </div> </div> ))} </div> </div> </> );
+    return ( <> <Modal isOpen={isConfirmOpen} onClose={() => setIsConfirmOpen(false)} title="Conferma Eliminazione"> <div> <p>Sei sicuro di voler eliminare questa risorsa?</p> <div className="flex justify-end mt-4"> <button onClick={() => setIsConfirmOpen(false)} className="bg-gray-300 text-gray-800 px-4 py-2 rounded-md mr-2">Annulla</button> <button onClick={deleteResource} className="bg-red-600 text-white px-4 py-2 rounded-md">Elimina</button> </div> </div> </Modal> <div> <h4 className="text-lg font-medium text-gray-700 mb-3">{editingResource ? 'Modifica Risorsa' : 'Aggiungi Risorsa'}</h4> <div className="space-y-4 p-4 border rounded-md bg-gray-50 mb-6"> <div className="grid grid-cols-1 md:grid-cols-2 gap-4"> <div> <label className="block text-sm font-medium text-gray-700">Nome Risorsa</label> <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Mario Rossi" className="mt-1 block w-full px-3 py-2 border-gray-300 rounded-md shadow-sm" required/> </div> <div> <label className="block text-sm font-medium text-gray-700">Società</label> <input type="text" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Acme Inc." className="mt-1 block w-full px-3 py-2 border-gray-300 rounded-md shadow-sm" list="companies-datalist" /> <datalist id="companies-datalist">{uniqueCompanies.map(c => <option key={c} value={c} />)}</datalist> </div> <div> <label className="block text-sm font-medium text-gray-700">Email</label> <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="mario.rossi@example.com" className="mt-1 block w-full px-3 py-2 border-gray-300 rounded-md shadow-sm" /> </div> <div> <label className="block text-sm font-medium text-gray-700">Telefono</label> <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+39 333 1234567" className="mt-1 block w-full px-3 py-2 border-gray-300 rounded-md shadow-sm" /> </div> <div> <label className="block text-sm font-medium text-gray-700">Costo Orario (€)</label> <input type="number" value={hourlyCost} onChange={(e) => setHourlyCost(e.target.value)} placeholder="50" className="mt-1 block w-full px-3 py-2 border-gray-300 rounded-md shadow-sm" /> </div> </div> <div> <label className="block text-sm font-medium text-gray-700">Note</label> <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Specializzazione, contatto, etc." rows="2" className="mt-1 block w-full px-3 py-2 border-gray-300 rounded-md shadow-sm"></textarea> </div> <div className="flex justify-end items-center gap-4"> {editingResource && (<button onClick={resetForm} className="text-sm text-gray-600 hover:underline">Annulla modifica</button>)} <button onClick={handleSubmit} className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 flex items-center gap-2"> <Plus size={16} /> {editingResource ? 'Salva Modifiche' : 'Aggiungi Risorsa'} </button> </div> </div> <h4 className="text-lg font-medium text-gray-700 mb-3">Elenco Risorse</h4> <div className="space-y-2 max-h-60 overflow-y-auto"> {resources.map(res => ( <div key={res.id} className="bg-white p-3 rounded-md border flex items-start justify-between"> <div className="flex-grow"> <p className="font-semibold text-gray-900">{res.name} <span className="text-sm font-normal text-gray-600">({formatCurrency(res.hourlyCost || 0)}/h)</span></p> {res.company && <p className="text-sm text-blue-700">{res.company}</p>} {res.email && <p className="text-sm text-gray-600">{res.email}</p>} {res.phone && <p className="text-sm text-gray-600">{res.phone}</p>} {res.notes && <p className="text-xs text-gray-500 mt-1">{res.notes}</p>} </div> <div className="flex-shrink-0 flex gap-2 ml-4"> <button onClick={() => handleEdit(res)} className="text-blue-600 hover:text-blue-800"><Edit size={16} /></button> <button onClick={() => confirmDelete(res.id)} className="text-red-500 hover:text-red-700"><Trash2 size={16} /></button> </div> </div> ))} </div> </div> </> );
 };
 
 const ProjectForm = ({ project, onDone, db, userId }) => {
@@ -125,12 +125,11 @@ const ProjectForm = ({ project, onDone, db, userId }) => {
 
 const TaskForm = ({ db, projects, task, resources, allTasks, onDone, selectedProjectIdForNew }) => {
     const getProjectColor = useCallback((pId) => projects.find(p => p.id === pId)?.color || '#3b82f6', [projects]);
-    
     const [name, setName] = useState(task ? task.name : '');
     const [projectId, setProjectId] = useState(task ? task.projectId : selectedProjectIdForNew || (projects.length > 0 ? projects[0].id : ''));
     const [startDate, setStartDate] = useState(task ? task.startDate : new Date().toISOString().split('T')[0]);
     const [duration, setDuration] = useState(task ? (calculateDaysDifference(task.startDate, task.endDate) + 1) : 1);
-    const [endDate, setEndDate] = useState(() => { const start = new Date(task ? task.startDate : new Date().toISOString().split('T')[0]); start.setDate(start.getDate() + duration - 1); return start.toISOString().split('T')[0]; });
+    const [endDate, setEndDate] = useState(() => { const start = new Date(task ? task.startDate : new Date().toISOString().split('T')[0]); start.setDate(start.getDate() + (task ? (calculateDaysDifference(task.startDate, task.endDate)) : 0)); return start.toISOString().split('T')[0]; });
     const [dateWarning, setDateWarning] = useState(null);
     const [completionPercentage, setCompletionPercentage] = useState(task ? task.completionPercentage || 0 : 0);
     const [dailyHours, setDailyHours] = useState(task ? task.dailyHours || 8 : 8);
@@ -179,9 +178,11 @@ const TaskForm = ({ db, projects, task, resources, allTasks, onDone, selectedPro
 
 const ActivityReportView = ({ projectsWithData, onExportPDF }) => {
     const reportData = useMemo(() => {
-        if (!projectsWithData) return { dueTodayTasks: [], dueInThreeDaysTasks: [], otherTasks: [] };
-        const today = new Date(); today.setHours(0, 0, 0, 0);
-        const threeDaysFromNow = new Date(); threeDaysFromNow.setDate(today.getDate() + 3);
+        if (!projectsWithData) return { overdueTasks: [], dueTodayTasks: [], dueInThreeDaysTasks: [], otherTasks: [] };
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const threeDaysFromNow = new Date();
+        threeDaysFromNow.setDate(today.getDate() + 3);
 
         const allEnrichedTasks = projectsWithData.flatMap(project =>
             project.tasks.map(task => ({
@@ -191,12 +192,36 @@ const ActivityReportView = ({ projectsWithData, onExportPDF }) => {
             }))
         );
 
-        const dueTodayTasks = allEnrichedTasks.filter(task => { const d = new Date(task.endDate); d.setHours(0,0,0,0); return d.getTime() === today.getTime(); }).sort((a,b) => a.projectName.localeCompare(b.projectName));
-        const dueInThreeDaysTasks = allEnrichedTasks.filter(task => { const d = new Date(task.endDate); d.setHours(0,0,0,0); return d > today && d <= threeDaysFromNow; }).sort((a,b) => new Date(a.endDate) - new Date(b.endDate));
-        const otherTasks = allEnrichedTasks.filter(task => { const d = new Date(task.endDate); d.setHours(0,0,0,0); return d.getTime() !== today.getTime() && (d < today || d > threeDaysFromNow) }).sort((a,b) => new Date(a.endDate) - new Date(b.endDate));
-        
-        return { dueTodayTasks, dueInThreeDaysTasks, otherTasks };
+        const overdueTasks = [];
+        const dueTodayTasks = [];
+        const dueInThreeDaysTasks = [];
+        const otherTasks = [];
+
+        allEnrichedTasks.forEach(task => {
+            const d = new Date(task.endDate);
+            d.setHours(0, 0, 0, 0);
+            const isComplete = (task.completionPercentage || 0) >= 100;
+
+            if (d < today && !isComplete) {
+                overdueTasks.push(task);
+            } else if (d.getTime() === today.getTime()) {
+                dueTodayTasks.push(task);
+            } else if (d > today && d <= threeDaysFromNow) {
+                dueInThreeDaysTasks.push(task);
+            } else {
+                otherTasks.push(task);
+            }
+        });
+
+        // Sort arrays
+        overdueTasks.sort((a, b) => new Date(a.endDate) - new Date(b.endDate));
+        dueTodayTasks.sort((a, b) => a.projectName.localeCompare(b.projectName));
+        dueInThreeDaysTasks.sort((a, b) => new Date(a.endDate) - new Date(b.endDate));
+        otherTasks.sort((a, b) => new Date(a.endDate) - new Date(b.endDate));
+
+        return { overdueTasks, dueTodayTasks, dueInThreeDaysTasks, otherTasks };
     }, [projectsWithData]);
+
 
     const renderTaskRow = (task) => ( <tr key={task.id}><td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900"><div className="flex items-center"><span className="w-3 h-3 rounded-full mr-3 flex-shrink-0" style={{backgroundColor: task.projectColor}}></span><span>{task.name}</span></div><div className="text-xs text-gray-500 pl-6">{task.projectName}</div></td><td className="px-4 py-4 whitespace-nowrap text-sm text-gray-600">{new Date(task.endDate).toLocaleDateString('it-IT')}</td><td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{task.assigned.map(r => r.name).join(', ') || 'N/A'}</td><td className="px-4 py-4 whitespace-nowrap text-sm">{task.totalTaskHours.toFixed(0)}h</td><td className="px-4 py-4 whitespace-nowrap text-sm">{formatCurrency(task.totalEstimatedCost)}<br/><span className="text-xs text-gray-500">({formatCurrency(task.spentCost)})</span></td><td className="px-4 py-4 whitespace-nowrap"><div className="w-full bg-gray-200 rounded-full h-2.5"><div className="bg-blue-600 h-2.5 rounded-full" style={{width: `${task.completionPercentage || 0}%`}}></div></div><span className="text-xs text-gray-500">{task.completionPercentage || 0}%</span></td></tr> );
 
@@ -207,13 +232,19 @@ const ActivityReportView = ({ projectsWithData, onExportPDF }) => {
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50"><tr><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Attività / Progetto</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scadenza</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Risorse</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ore Stimate</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Costo Stimato/Sostenuto</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Avanzamento</th></tr></thead>
                     <tbody className="bg-white divide-y divide-gray-200">
+                        {reportData.overdueTasks.length > 0 && <tr className="bg-red-200"><td colSpan="6" className="px-4 py-2 text-sm font-bold text-red-800">SCADUTE E NON COMPLETATE</td></tr>}
+                        {reportData.overdueTasks.map(renderTaskRow)}
+
                         {reportData.dueTodayTasks.length > 0 && <tr className="bg-red-100"><td colSpan="6" className="px-4 py-2 text-sm font-bold text-red-800">IN SCADENZA OGGI</td></tr>}
                         {reportData.dueTodayTasks.map(renderTaskRow)}
+                        
                         {reportData.dueInThreeDaysTasks.length > 0 && <tr className="bg-yellow-100"><td colSpan="6" className="px-4 py-2 text-sm font-bold text-yellow-800">IN SCADENZA A BREVE (3 GIORNI)</td></tr>}
                         {reportData.dueInThreeDaysTasks.map(renderTaskRow)}
+                        
                         {reportData.otherTasks.length > 0 && <tr className="bg-gray-100"><td colSpan="6" className="px-4 py-2 text-sm font-bold text-gray-700">ALTRE ATTIVITÀ</td></tr>}
                         {reportData.otherTasks.map(renderTaskRow)}
-                        {reportData.dueTodayTasks.length === 0 && reportData.dueInThreeDaysTasks.length === 0 && reportData.otherTasks.length === 0 && ( <tr><td colSpan="6" className="px-6 py-4 text-center text-sm text-gray-500">Nessuna attività da mostrare.</td></tr> )}
+                        
+                        {reportData.overdueTasks.length === 0 && reportData.dueTodayTasks.length === 0 && reportData.dueInThreeDaysTasks.length === 0 && reportData.otherTasks.length === 0 && ( <tr><td colSpan="6" className="px-6 py-4 text-center text-sm text-gray-500">Nessuna attività da mostrare.</td></tr> )}
                     </tbody>
                 </table>
             </div>
@@ -227,34 +258,14 @@ const AssignmentReportView = ({ projectsWithData, resources, onExportPDF }) => {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        const allTasks = projectsWithData.flatMap(p => p.tasks);
+        const allTasks = projectsWithData.flatMap(p => p.tasks.map(t => ({...t, projectName: p.name, projectColor: p.color})));
         
         return resources.map(resource => {
-            const assignedTasks = allTasks
-                .filter(task => task.assignedResources?.includes(resource.id))
-                .sort((a, b) => new Date(a.endDate) - new Date(b.endDate));
-
+            const assignedTasks = allTasks.filter(task => task.assignedResources?.includes(resource.id)).sort((a, b) => new Date(a.endDate) - new Date(b.endDate));
             let dailyWorkload = 0;
-            const activeTasksToday = allTasks.filter(task => {
-                const startDate = new Date(task.startDate);
-                const endDate = new Date(task.endDate);
-                startDate.setHours(0, 0, 0, 0);
-                endDate.setHours(0, 0, 0, 0);
-                return task.assignedResources?.includes(resource.id) &&
-                       today >= startDate && today <= endDate;
-            });
-
-            activeTasksToday.forEach(task => {
-                const numResources = task.assignedResources?.length || 1;
-                const hoursPerResource = (task.dailyHours || 8) / numResources;
-                dailyWorkload += hoursPerResource;
-            });
-
-            return {
-                ...resource,
-                assignedTasks,
-                dailyWorkload,
-            };
+            const activeTasksToday = allTasks.filter(task => { const startDate = new Date(task.startDate); const endDate = new Date(task.endDate); startDate.setHours(0, 0, 0, 0); endDate.setHours(0, 0, 0, 0); return task.assignedResources?.includes(resource.id) && today >= startDate && today <= endDate; });
+            activeTasksToday.forEach(task => { const numResources = task.assignedResources?.length || 1; const hoursPerResource = (task.dailyHours || 8) / numResources; dailyWorkload += hoursPerResource; });
+            return { ...resource, assignedTasks, dailyWorkload };
         }).sort((a, b) => a.name.localeCompare(b.name));
     }, [projectsWithData, resources]);
 
@@ -264,30 +275,12 @@ const AssignmentReportView = ({ projectsWithData, resources, onExportPDF }) => {
             <div id="assignment-report-content" className="bg-white shadow-md rounded-lg overflow-x-auto">
                  {reportData.map(resource => (
                     <div key={resource.id} className="mb-8">
-                        <div className="p-3 bg-gray-100 border-b-2 border-gray-300">
-                           <h3 className="text-lg font-bold text-gray-800">{resource.name}</h3>
-                           <p className="text-sm text-gray-600">Carico di lavoro odierno stimato: <span className="font-bold">{resource.dailyWorkload.toFixed(1)} ore</span></p>
-                        </div>
+                        <div className="p-3 bg-gray-100 border-b-2 border-gray-300"> <h3 className="text-lg font-bold text-gray-800">{resource.name}</h3> <p className="text-sm text-gray-600">Carico di lavoro odierno stimato: <span className="font-bold">{resource.dailyWorkload.toFixed(1)} ore</span></p> </div>
                         <table className="min-w-full">
-                            <thead className="bg-gray-50">
-                                <tr>
-                                    <th className="w-1/3 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Attività</th>
-                                    <th className="w-1/3 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Progetto</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scadenza</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Avanzamento</th>
-                                </tr>
-                            </thead>
+                            <thead className="bg-gray-50"> <tr> <th className="w-1/3 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Attività</th> <th className="w-1/3 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Progetto</th> <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scadenza</th> <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Avanzamento</th> </tr> </thead>
                              <tbody className="bg-white divide-y divide-gray-200">
-                                {resource.assignedTasks.length > 0 ? resource.assignedTasks.map(task => (
-                                    <tr key={task.id}>
-                                        <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{task.name}</td>
-                                        <td className="px-4 py-4 whitespace-nowrap text-sm"><div className="flex items-center"><span className="w-3 h-3 rounded-full mr-2" style={{backgroundColor: task.projectColor}}></span>{task.projectName}</div></td>
-                                        <td className="px-4 py-4 whitespace-nowrap text-sm">{new Date(task.endDate).toLocaleDateString('it-IT')}</td>
-                                        <td className="px-4 py-4 whitespace-nowrap"><div className="w-full bg-gray-200 rounded-full h-2.5"><div className="bg-blue-600 h-2.5 rounded-full" style={{width: `${task.completionPercentage || 0}%`}}></div></div><span className="text-xs text-gray-500">{task.completionPercentage || 0}%</span></td>
-                                    </tr>
-                                )) : (
-                                    <tr><td colSpan="4" className="px-4 py-4 text-sm text-gray-500 italic">Nessuna attività assegnata.</td></tr>
-                                )}
+                                {resource.assignedTasks.length > 0 ? resource.assignedTasks.map(task => ( <tr key={task.id}> <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{task.name}</td> <td className="px-4 py-4 whitespace-nowrap text-sm"><div className="flex items-center"><span className="w-3 h-3 rounded-full mr-2" style={{backgroundColor: task.projectColor}}></span>{task.projectName}</div></td> <td className="px-4 py-4 whitespace-nowrap text-sm">{new Date(task.endDate).toLocaleDateString('it-IT')}</td> <td className="px-4 py-4 whitespace-nowrap"><div className="w-full bg-gray-200 rounded-full h-2.5"><div className="bg-blue-600 h-2.5 rounded-full" style={{width: `${task.completionPercentage || 0}%`}}></div></div><span className="text-xs text-gray-500">{task.completionPercentage || 0}%</span></td> </tr>
+                                )) : ( <tr><td colSpan="4" className="px-4 py-4 text-sm text-gray-500 italic">Nessuna attività assegnata.</td></tr> )}
                             </tbody>
                         </table>
                     </div>
@@ -297,17 +290,12 @@ const AssignmentReportView = ({ projectsWithData, resources, onExportPDF }) => {
     );
 };
 
-
 const CostReportView = ({ projectsWithData, onExportPDF }) => {
     const { projects, grandTotalCost, grandSpentCost } = useMemo(() => {
         if (!projectsWithData) return { projects: [], grandTotalCost: 0, grandSpentCost: 0 };
         let totalCost = 0;
         let spentCost = 0;
-        const processedProjects = projectsWithData.map(p => {
-            totalCost += p.projectTotalCost || 0;
-            spentCost += p.projectSpentCost || 0;
-            return p;
-        });
+        const processedProjects = projectsWithData.map(p => { totalCost += p.projectTotalCost || 0; spentCost += p.projectSpentCost || 0; return p; });
         return { projects: processedProjects, grandTotalCost: totalCost, grandSpentCost: spentCost };
     }, [projectsWithData]);
     
@@ -344,44 +332,46 @@ const MainDashboard = ({ projects, tasks, resources, db, userId }) => {
     const SIDEBAR_WIDTH = 384;
 
     // --- Calcolo date e task ---
-    const { flatTasksSorted, overallStartDate, totalDays } = useMemo(() => { 
-        if (tasks.length === 0) return { flatTasksSorted: [], overallStartDate: new Date(), totalDays: 30 };
-        const startDates = tasks.map(t => new Date(t.startDate)); 
-        const endDates = tasks.map(t => new Date(t.endDate)); 
-        const minDate = new Date(Math.min(...startDates.filter(d => d && !isNaN(d)))); 
-        const maxDate = new Date(Math.max(...endDates.filter(d => d && !isNaN(d)))); 
-        if (!minDate || !maxDate || isNaN(minDate) || isNaN(maxDate)) return { flatTasksSorted: tasks, overallStartDate: new Date(), totalDays: 30 };
+    const { overallStartDate, totalDays } = useMemo(() => { 
+        if (tasks.length === 0) return { overallStartDate: new Date(), totalDays: 30 };
+        const startDates = tasks.map(t => new Date(t.startDate)).filter(d => !isNaN(d)); 
+        const endDates = tasks.map(t => new Date(t.endDate)).filter(d => !isNaN(d)); 
+        if(startDates.length === 0 || endDates.length === 0) return { overallStartDate: new Date(), totalDays: 30 };
+        const minDate = new Date(Math.min(...startDates)); 
+        const maxDate = new Date(Math.max(...endDates)); 
+        if (isNaN(minDate) || isNaN(maxDate)) return { overallStartDate: new Date(), totalDays: 30 };
         const diff = calculateDaysDifference(minDate, maxDate) + 5; 
-        return { flatTasksSorted: tasks, overallStartDate: minDate, totalDays: diff > 30 ? diff : 30 };
+        return { overallStartDate: minDate, totalDays: diff > 30 ? diff : 30 };
     }, [tasks]);
 
     const dateHeaders = useMemo(() => { const headers = []; let currentDate = new Date(overallStartDate); currentDate.setDate(currentDate.getDate() - 1); for (let i = 0; i < totalDays + 2; i++) { headers.push(new Date(currentDate)); currentDate.setDate(currentDate.getDate() + 1); } return headers; }, [overallStartDate, totalDays]);
     
-    const { projectsWithData, taskPositions } = useMemo(() => {
-        if (!projects || !tasks || !resources || dateHeaders.length === 0) return { projectsWithData: [], taskPositions: new Map() };
+    const { projectsWithData, taskPositions, ganttHeight } = useMemo(() => {
+        if (!projects || !tasks || !resources || dateHeaders.length === 0) return { projectsWithData: [], taskPositions: new Map(), ganttHeight: 0 };
         
         const taskMap = {};
         tasks.forEach(task => { const startDate = new Date(task.startDate); const endDate = new Date(task.endDate); const duration = calculateDaysDifference(startDate, endDate) + 1; taskMap[task.id] = { ...task, startDate, endDate, duration: duration > 0 ? duration : 1 }; });
         for (let i = 0; i < tasks.length * 2; i++) {
              tasks.forEach(task => {
-                if (task.dependencies && task.dependencies.length > 0) {
-                    let maxPredecessorEndDate = new Date(0);
-                    task.dependencies.forEach(depId => { const predecessor = taskMap[depId]; if (predecessor && predecessor.endDate > maxPredecessorEndDate) maxPredecessorEndDate = predecessor.endDate; });
-                    if (maxPredecessorEndDate > new Date(0)) {
-                        const newStartDate = new Date(maxPredecessorEndDate); newStartDate.setDate(newStartDate.getDate() + 1);
-                        if (newStartDate > taskMap[task.id].startDate) { const currentDuration = taskMap[task.id].duration; taskMap[task.id].startDate = newStartDate; const newEndDate = new Date(newStartDate); newEndDate.setDate(newEndDate.getDate() + currentDuration - 1); taskMap[task.id].endDate = newEndDate; }
-                    }
-                }
-            });
+                 if (task.dependencies && task.dependencies.length > 0) {
+                     let maxPredecessorEndDate = new Date(0);
+                     task.dependencies.forEach(depId => { const predecessor = taskMap[depId]; if (predecessor && predecessor.endDate > maxPredecessorEndDate) maxPredecessorEndDate = predecessor.endDate; });
+                     if (maxPredecessorEndDate > new Date(0)) {
+                         const newStartDate = new Date(maxPredecessorEndDate); newStartDate.setDate(newStartDate.getDate() + 1);
+                         if (newStartDate > taskMap[task.id].startDate) { const currentDuration = taskMap[task.id].duration; taskMap[task.id].startDate = newStartDate; const newEndDate = new Date(newStartDate); newEndDate.setDate(newEndDate.getDate() + currentDuration - 1); taskMap[task.id].endDate = newEndDate; }
+                     }
+                 }
+             });
         }
         const processedTasks = Object.values(taskMap);
         const positions = new Map();
         let currentY = 0;
 
-        const pWithData = projects.map(p => { 
+        const pWithData = projects.sort((a,b) => a.name.localeCompare(b.name)).map(p => { 
             const projectTasks = processedTasks.filter(t => t.projectId === p.id).sort((a,b) => (a.order || 0) - (b.order || 0));
             let totalDuration = 0; let weightedCompletion = 0; let projectTotalCost = 0; let projectSpentCost = 0; let projectTotalHours = 0; let projectWorkedHours = 0;
             
+            const projectTop = currentY;
             currentY += PROJECT_HEADER_HEIGHT;
 
             const enrichedTasks = projectTasks.map(task => {
@@ -391,8 +381,8 @@ const MainDashboard = ({ projects, tasks, resources, db, userId }) => {
                 const totalTaskHours = duration * dailyHours;
                 const workedHours = totalTaskHours * (completion / 100);
                 const assigned = task.assignedResources?.map(resId => resources.find(r => r.id === resId)).filter(Boolean) || [];
-                const combinedHourlyRate = assigned.reduce((sum, res) => sum + (res.hourlyCost || 0), 0);
-                const totalEstimatedCost = totalTaskHours * combinedHourlyRate;
+                const totalHourlyRate = assigned.reduce((sum, res) => sum + (res.hourlyCost || 0), 0);
+                const totalEstimatedCost = totalTaskHours * totalHourlyRate;
                 const spentCost = totalEstimatedCost * (completion / 100);
 
                 totalDuration += duration;
@@ -402,88 +392,44 @@ const MainDashboard = ({ projects, tasks, resources, db, userId }) => {
                 projectTotalHours += totalTaskHours;
                 projectWorkedHours += workedHours;
                 
-                const taskTop = currentY;
-                positions.set(task.id, {
-                    top: taskTop,
-                    left: calculateDaysDifference(dateHeaders[0], task.startDate) * DAY_WIDTH,
-                    width: duration * DAY_WIDTH,
-                    height: ROW_HEIGHT,
-                });
+                positions.set(task.id, { top: currentY, left: calculateDaysDifference(dateHeaders[0], task.startDate) * DAY_WIDTH, width: duration * DAY_WIDTH, });
                 currentY += ROW_HEIGHT;
-
                 return {...task, assigned, totalTaskHours, workedHours, totalEstimatedCost, spentCost };
             });
             
-            if (projectTasks.length === 0) {
-                currentY += ROW_HEIGHT;
-            }
-
+            if (projectTasks.length === 0) { currentY += ROW_HEIGHT; }
             const projectCompletionPercentage = totalDuration > 0 ? weightedCompletion / totalDuration : 0;
-            return { ...p, tasks: enrichedTasks, projectCompletionPercentage, projectTotalCost, projectSpentCost, projectTotalHours, projectWorkedHours };
+            return { ...p, tasks: enrichedTasks, projectCompletionPercentage, projectTotalCost, projectSpentCost, projectTotalHours, projectWorkedHours, projectTop };
         }); 
-        return { projectsWithData: pWithData, taskPositions: positions };
-    }, [tasks, projects, resources, dateHeaders]);
+        return { projectsWithData: pWithData, taskPositions: positions, ganttHeight: currentY };
+    }, [tasks, projects, resources, dateHeaders, DAY_WIDTH, ROW_HEIGHT, PROJECT_HEADER_HEIGHT]);
 
     const arrowPaths = useMemo(() => {
         const paths = [];
         if (!tasks || taskPositions.size === 0) return paths;
-
         tasks.forEach(task => {
             if (task.dependencies && task.dependencies.length > 0) {
                 const successorPos = taskPositions.get(task.id);
                 if (!successorPos) return;
-
                 task.dependencies.forEach(predecessorId => {
                     const predecessorPos = taskPositions.get(predecessorId);
                     if (!predecessorPos) return;
-                    
-                    // The starting point Y is based on the predecessor's row center.
-                    // The total height of the header row is 48px (h-12).
-                    // Project header is 64px. Task rows are 64px.
-                    // The Y coordinate inside the SVG needs to account for the content above it.
-                    const headerAndProjectOffset = 48; // Sticky header height
-                    let predecessorY = headerAndProjectOffset;
-                    let successorY = headerAndProjectOffset;
-
-                    let predProjFound = false;
-                    let succProjFound = false;
-
-                    for(const proj of projectsWithData) {
-                        if(!predProjFound) predecessorY += PROJECT_HEADER_HEIGHT;
-                        if(!succProjFound) successorY += PROJECT_HEADER_HEIGHT;
-
-                        for(const t of proj.tasks){
-                            if(t.id === predecessorId) predProjFound = true;
-                            if(t.id === task.id) succProjFound = true;
-                            if(!predProjFound) predecessorY += ROW_HEIGHT;
-                            if(!succProjFound) successorY += ROW_HEIGHT;
-                        }
-                        if (proj.tasks.length === 0) {
-                           if(!predProjFound) predecessorY += ROW_HEIGHT;
-                           if(!succProjFound) successorY += ROW_HEIGHT;
-                        }
-                    }
-
                     const startX = predecessorPos.left + predecessorPos.width;
-                    const startY = predecessorY - (ROW_HEIGHT / 2);
+                    const startY = predecessorPos.top + (ROW_HEIGHT / 2);
                     const endX = successorPos.left;
-                    const endY = successorY - (ROW_HEIGHT / 2);
-
+                    const endY = successorPos.top + (ROW_HEIGHT / 2);
                     const path = `M ${startX} ${startY} L ${startX + DAY_WIDTH / 2} ${startY} L ${startX + DAY_WIDTH / 2} ${endY} L ${endX} ${endY}`;
                     paths.push({id: `${predecessorId}-${task.id}`, d: path});
                 });
             }
         });
         return paths;
-    }, [tasks, taskPositions, projectsWithData]);
-
+    }, [tasks, taskPositions, DAY_WIDTH, ROW_HEIGHT]);
 
     const getResourceById = useCallback((id) => resources.find(r => r.id === id), [resources]);
     const handleEditTask = (task) => { setEditingTask(tasks.find(t=>t.id === task.id)); setIsTaskModalOpen(true); };
     const handleEditProject = (project) => { setEditingProject(project); setIsProjectModalOpen(true); };
-    
     const handleOpenNewProjectModal = () => { const existingColors = projects.map(p => p.color); let newColor; do { newColor = `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`; } while (existingColors.includes(newColor)); setEditingProject({ name: '', color: newColor }); setIsProjectModalOpen(true); };
-    
     const confirmDeleteItem = (item, type) => setItemToDelete({item, type});
     
     const handleDeleteItem = async () => {
@@ -491,36 +437,36 @@ const MainDashboard = ({ projects, tasks, resources, db, userId }) => {
         const { item, type } = itemToDelete;
         setIsLoading(true); setLoadingMessage("Cancellazione...");
         try {
+            const batch = writeBatch(db);
             if (type === 'task') {
-                const batch = writeBatch(db);
                 const tasksToUpdate = tasks.filter(t => t.dependencies?.includes(item.id));
                 tasksToUpdate.forEach(t => { const taskRef = doc(db, `/artifacts/${appId}/public/data/tasks`, t.id); batch.update(taskRef, { dependencies: t.dependencies.filter(depId => depId !== item.id) }); });
-                const taskRef = doc(db, `/artifacts/${appId}/public/data/tasks`, item.id); batch.delete(taskRef); await batch.commit();
+                const taskRef = doc(db, `/artifacts/${appId}/public/data/tasks`, item.id); batch.delete(taskRef);
                 setNotification({message: "Attività eliminata.", type: "success"});
             } else if (type === 'project') {
-                const batch = writeBatch(db);
                 const tasksQuery = query(collection(db, `/artifacts/${appId}/public/data/tasks`), where("projectId", "==", item.id));
                 const tasksSnapshot = await getDocs(tasksQuery);
                 tasksSnapshot.forEach(d => batch.delete(d.ref));
-                const projectRef = doc(db, `/artifacts/${appId}/public/data/projects`, item.id); batch.delete(projectRef); await batch.commit();
-                setNotification({message: "Progetto e tutte le sue attività sono stati eliminati.", type: "success"});
+                const projectRef = doc(db, `/artifacts/${appId}/public/data/projects`, item.id); batch.delete(projectRef);
+                setNotification({message: "Progetto e attività eliminate.", type: "success"});
             }
-        } catch (error) { console.error("Errore durante l'eliminazione:", error); setNotification({message: `Errore: ${error.message}`, type: "error"});
+            await batch.commit();
+        } catch (error) { console.error("Errore eliminazione:", error); setNotification({message: `Errore: ${error.message}`, type: "error"});
         } finally { setItemToDelete(null); setIsLoading(false); }
     };
     
     const handleDragStart = (e, task, type) => { e.dataTransfer.effectAllowed = 'move'; dragInfo.current = { taskId: task.id, type, initialX: e.clientX, initialStartDate: task.startDate, initialEndDate: task.endDate }; };
-    const handleGanttDrop = async (e) => { e.preventDefault(); const { taskId, type, initialX, initialStartDate, initialEndDate } = dragInfo.current; if (!taskId) return; const pixelsPerDay = DAY_WIDTH; const dateOffset = Math.round((e.clientX - initialX) / pixelsPerDay); let newStartDate, newEndDate; const taskRef = doc(db, `/artifacts/${appId}/public/data/tasks`, taskId); if (type === 'move') { const duration = calculateDaysDifference(initialStartDate, initialEndDate); newStartDate = new Date(initialStartDate); newStartDate.setDate(newStartDate.getDate() + dateOffset); newEndDate = new Date(newStartDate); newEndDate.setDate(newEndDate.getDate() + duration); } else if (type === 'resize-end') { newStartDate = new Date(initialStartDate); newEndDate = new Date(initialEndDate); newEndDate.setDate(newEndDate.getDate() + dateOffset); if (newEndDate < newStartDate) newEndDate = newStartDate; } else if (type === 'resize-start') { newEndDate = new Date(initialEndDate); newStartDate = new Date(initialStartDate); newStartDate.setDate(newStartDate.getDate() + dateOffset); if (newStartDate > newEndDate) newStartDate = newEndDate; } else { return; } try { await updateDoc(taskRef, { startDate: newStartDate.toISOString().split('T')[0], endDate: newEndDate.toISOString().split('T')[0] }); } catch(error) { console.error("Errore aggiornamento task:", error); } dragInfo.current = {}; };
+    const handleGanttDrop = async (e) => { e.preventDefault(); const { taskId, type, initialX, initialStartDate, initialEndDate } = dragInfo.current; if (!taskId) return; const dateOffset = Math.round((e.clientX - initialX) / DAY_WIDTH); let newStartDate, newEndDate; const taskRef = doc(db, `/artifacts/${appId}/public/data/tasks`, taskId); if (type === 'move') { const duration = calculateDaysDifference(initialStartDate, initialEndDate); newStartDate = new Date(initialStartDate); newStartDate.setDate(newStartDate.getDate() + dateOffset); newEndDate = new Date(newStartDate); newEndDate.setDate(newEndDate.getDate() + duration); } else if (type === 'resize-end') { newStartDate = new Date(initialStartDate); newEndDate = new Date(initialEndDate); newEndDate.setDate(newEndDate.getDate() + dateOffset); if (newEndDate < newStartDate) newEndDate = newStartDate; } else if (type === 'resize-start') { newEndDate = new Date(initialEndDate); newStartDate = new Date(initialStartDate); newStartDate.setDate(newStartDate.getDate() + dateOffset); if (newStartDate > newEndDate) newStartDate = newEndDate; } else { return; } try { await updateDoc(taskRef, { startDate: newStartDate.toISOString().split('T')[0], endDate: newEndDate.toISOString().split('T')[0] }); } catch(error) { console.error("Errore aggiornamento task:", error); } dragInfo.current = {}; };
     const exportData = () => { const dataToExport = { projects, tasks, resources, exportedAt: new Date().toISOString() }; const dataStr = JSON.stringify(dataToExport, null, 2); const blob = new Blob([dataStr], {type: "application/json"}); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `project_data_backup_${new Date().toISOString().split('T')[0]}.json`; document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url); setNotification({message: "Esportazione completata.", type: "success"}); };
     const handleFileImportChange = (e) => { const file = e.target.files[0]; if (file) { setImportFile(file); setIsImportConfirmOpen(true); } e.target.value = null; };
-    const importData = async () => { if (!importFile) return; setIsLoading(true); setLoadingMessage("Importazione in corso..."); const reader = new FileReader(); reader.onload = async (e) => { try { const data = JSON.parse(e.target.result); if (!data.projects || !data.tasks || !data.resources) { throw new Error("Formato file non valido."); } setLoadingMessage("Cancellazione dati esistenti..."); const collectionsToDelete = ['tasks', 'resources', 'projects']; for (const coll of collectionsToDelete) { const snapshot = await getDocs(collection(db, `/artifacts/${appId}/public/data/${coll}`)); const batch = writeBatch(db); snapshot.docs.forEach(d => batch.delete(d.ref)); await batch.commit(); } setLoadingMessage("Importazione nuovi dati..."); const importBatch = writeBatch(db); data.projects.forEach(p => importBatch.set(doc(db, `/artifacts/${appId}/public/data/projects`, p.id), p)); data.tasks.forEach(t => importBatch.set(doc(db, `/artifacts/${appId}/public/data/tasks`, t.id), t)); data.resources.forEach(r => importBatch.set(doc(db, `/artifacts/${appId}/public/data/resources`, r.id), r)); await importBatch.commit(); setNotification({message: "Importazione completata con successo!", type: "success"}); } catch (error) { console.error("Errore durante l'importazione:", error); setNotification({message: `Errore importazione: ${error.message}`, type: "error"}); } finally { setIsLoading(false); setImportFile(null); setIsImportConfirmOpen(false); } }; reader.readAsText(importFile); };
-    const exportToPDF = (reportType) => { const { jsPDF } = window.jspdf; if (typeof jsPDF === 'undefined' || (reportType==='gantt' && typeof window.html2canvas === 'undefined')) { alert("Libreria PDF non ancora caricata. Riprova tra un momento."); return; } setIsLoading(true); setLoadingMessage(`Esportazione ${reportType}...`); const timestamp = new Date().toLocaleString('sv-SE').replace(/ /g, '_').replace(/:/g, '-'); if(reportType === 'cost' || reportType === 'activity' || reportType === 'assignment') { const content = document.getElementById(`${reportType}-report-content`); const title = reportType === 'cost' ? 'Report Costi' : reportType === 'activity' ? 'Report Attività' : 'Report Assegnazioni'; const doc = new jsPDF(); doc.autoTable({ html: `#${reportType}-report-content table`, startY: 20, didParseCell: function(data) { if (data.cell.raw.nodeName === 'TD') { data.cell.styles.fontStyle = 'normal'; data.cell.styles.halign = data.cell.raw.style.textAlign || 'left'; } if (data.cell.raw.nodeName === 'TH') { data.cell.styles.fontStyle = 'bold'; } } }); doc.text(title, 14, 15); doc.save(`report_${reportType}_${timestamp}.pdf`); setIsLoading(false); } else if (reportType === 'gantt') { const ganttElement = ganttContainerRef.current; window.html2canvas(ganttElement, { useCORS: true, scale: 1.5, width: ganttElement.scrollWidth, height: ganttElement.scrollHeight, windowWidth: ganttElement.scrollWidth, windowHeight: ganttElement.scrollHeight, }).then(canvas => { const imgData = canvas.toDataURL('image/png'); const imgWidth = 280; const pageHeight = 190; const imgHeight = canvas.height * imgWidth / canvas.width; let heightLeft = imgHeight; const doc = new jsPDF('l', 'mm', 'a4'); let position = 10; doc.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight); heightLeft -= pageHeight; while (heightLeft > 0) { position = heightLeft - imgHeight + 10; doc.addPage(); doc.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight); heightLeft -= pageHeight; } doc.save(`gantt_chart_${timestamp}.pdf`); setIsLoading(false); }).catch(() => setIsLoading(false)); } };
+    const importData = async () => { if (!importFile) return; setIsLoading(true); setLoadingMessage("Importazione in corso..."); const reader = new FileReader(); reader.onload = async (e) => { try { const data = JSON.parse(e.target.result); if (!data.projects || !data.tasks || !data.resources) { throw new Error("Formato file non valido."); } setLoadingMessage("Cancellazione dati esistenti..."); const collectionsToDelete = ['tasks', 'resources', 'projects']; for (const coll of collectionsToDelete) { const snapshot = await getDocs(collection(db, `/artifacts/${appId}/public/data/${coll}`)); const batch = writeBatch(db); snapshot.docs.forEach(d => batch.delete(d.ref)); await batch.commit(); } setLoadingMessage("Importazione nuovi dati..."); const importBatch = writeBatch(db); data.projects.forEach(p => importBatch.set(doc(collection(db, `/artifacts/${appId}/public/data/projects`), p.id), p)); data.tasks.forEach(t => importBatch.set(doc(collection(db, `/artifacts/${appId}/public/data/tasks`), t.id), t)); data.resources.forEach(r => importBatch.set(doc(collection(db, `/artifacts/${appId}/public/data/resources`), r.id), r)); await importBatch.commit(); setNotification({message: "Importazione completata!", type: "success"}); } catch (error) { console.error("Errore importazione:", error); setNotification({message: `Errore importazione: ${error.message}`, type: "error"}); } finally { setIsLoading(false); setImportFile(null); setIsImportConfirmOpen(false); } }; reader.readAsText(importFile); };
+    const exportToPDF = (reportType) => { const { jsPDF } = window.jspdf; if (typeof jsPDF === 'undefined' || (reportType==='gantt' && typeof window.html2canvas === 'undefined')) { setNotification({message: "Libreria PDF non caricata. Riprova.", type: "error"}); return; } setIsLoading(true); setLoadingMessage(`Esportazione ${reportType}...`); const timestamp = new Date().toLocaleString('sv-SE').replace(/ /g, '_').replace(/:/g, '-'); if(reportType === 'cost' || reportType === 'activity' || reportType === 'assignment') { const content = document.getElementById(`${reportType}-report-content`); const title = reportType === 'cost' ? 'Report Costi' : reportType === 'activity' ? 'Report Attività' : 'Report Assegnazioni'; const doc = new jsPDF(); doc.autoTable({ html: `#${reportType}-report-content table`, startY: 20, didParseCell: function(data) { const raw = data.cell.raw; if (raw.nodeName === 'TD' || raw.nodeName === 'TH') { data.cell.styles.fillColor = window.getComputedStyle(raw).backgroundColor; const fontColor = getContrastingTextColor(data.cell.styles.fillColor); data.cell.styles.textColor = fontColor === 'text-black' ? '#000000' : '#ffffff'; data.cell.styles.halign = data.cell.raw.style.textAlign || 'left'; } } }); doc.text(title, 14, 15); doc.save(`report_${reportType}_${timestamp}.pdf`); setIsLoading(false); } else if (reportType === 'gantt') { const ganttElement = ganttContainerRef.current; window.html2canvas(ganttElement, { useCORS: true, scale: 1.5, width: ganttElement.scrollWidth, height: ganttElement.scrollHeight, windowWidth: ganttElement.scrollWidth, windowHeight: ganttElement.scrollHeight, }).then(canvas => { const imgData = canvas.toDataURL('image/png'); const imgWidth = 280; const pageHeight = 190; const imgHeight = canvas.height * imgWidth / canvas.width; let heightLeft = imgHeight; const doc = new jsPDF('l', 'mm', 'a4'); let position = 10; doc.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight); heightLeft -= pageHeight; while (heightLeft > 0) { position = heightLeft - imgHeight + 10; doc.addPage(); doc.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight); heightLeft -= pageHeight; } doc.save(`gantt_chart_${timestamp}.pdf`); setIsLoading(false); }).catch(() => setIsLoading(false)); } };
     
     const today = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d; }, []);
-    const todayMarkerPosition = useMemo(() => { if (dateHeaders.length === 0) return -1; const ganttStartDate = dateHeaders[0]; return calculateDaysDifference(ganttStartDate, today) * DAY_WIDTH; }, [dateHeaders, today]);
+    const todayMarkerPosition = useMemo(() => { if (dateHeaders.length === 0) return -1; return calculateDaysDifference(dateHeaders[0], today) * DAY_WIDTH; }, [dateHeaders, today]);
 
     return (
-        <div className="h-screen w-screen bg-gray-100 flex flex-col">
+        <div className="h-screen w-screen bg-gray-100 flex flex-col font-sans">
             {isLoading && <Loader message={loadingMessage} />}
             <Notification message={notification.message} type={notification.type} onClose={() => setNotification({message: ''})} />
             <header className="p-4 border-b flex items-center justify-between bg-white shadow-sm flex-wrap gap-2">
@@ -528,55 +474,56 @@ const MainDashboard = ({ projects, tasks, resources, db, userId }) => {
                 <div className="flex items-center gap-2 flex-wrap"> <button onClick={exportData} className="bg-gray-600 text-white px-3 py-2 rounded-md hover:bg-gray-700 flex items-center gap-2 text-sm"><FileDown size={16}/> Esporta Dati</button> <button onClick={() => fileInputRef.current.click()} className="bg-gray-600 text-white px-3 py-2 rounded-md hover:bg-gray-700 flex items-center gap-2 text-sm"><FileUp size={16}/> Importa Dati</button> <input type="file" ref={fileInputRef} onChange={handleFileImportChange} accept=".json" className="hidden"/> <button onClick={handleOpenNewProjectModal} className="bg-purple-600 text-white px-3 py-2 rounded-md hover:bg-purple-700 flex items-center gap-2 text-sm"> <Plus size={16} /> Progetto </button> <button onClick={() => setIsResourceModalOpen(true)} className="bg-yellow-500 text-white px-3 py-2 rounded-md hover:bg-yellow-600 flex items-center gap-2 text-sm"> <Users size={16} /> Risorse </button> <button onClick={() => { setEditingTask(null); setIsTaskModalOpen(true); }} className="bg-blue-500 text-white px-3 py-2 rounded-md hover:bg-blue-600 flex items-center gap-2 text-sm"> <Plus size={16} /> Attività </button> </div>
             </header>
             <main className="flex-grow overflow-auto">
-                {view === 'gantt' ? ( <div className="h-full w-full overflow-auto" ref={ganttContainerRef} onDrop={handleGanttDrop} onDragOver={e => e.preventDefault()}> <div className="relative" style={{ width: `${SIDEBAR_WIDTH + dateHeaders.length * DAY_WIDTH}px`, minHeight: '100%' }}> <div className="sticky top-0 z-30 flex h-12 bg-white"><div className="w-96 sticky left-0 bg-gray-100 z-10 flex items-center justify-between px-4 border-b border-r"><span className="font-semibold text-gray-700">Progetti</span><button onClick={() => exportToPDF('gantt')} className="text-blue-600 hover:text-blue-800 p-1"><FileDown size={18}/></button></div><div className="flex">{dateHeaders.map((date) => { const isToday = date.toDateString() === today.toDateString(); return (<div key={date.toISOString()} className={`w-10 text-center border-r border-b flex-shrink-0 flex flex-col justify-center ${isToday ? 'bg-red-200' : 'bg-gray-50'}`}><div className={`text-xs ${date.getDay() === 0 || date.getDay() === 6 ? 'text-red-500' : 'text-gray-500'}`}>{['D', 'L', 'M', 'M', 'G', 'V', 'S'][date.getDay()]}</div><div className={`text-sm font-semibold ${isToday ? 'text-red-600' : 'text-gray-800'}`}>{date.getDate()}</div></div>)})}</div></div>
-                <svg className="absolute top-12 left-0 w-full h-full pointer-events-none z-20" style={{marginLeft: `${SIDEBAR_WIDTH}px`}}>
-                    <defs>
-                        <marker id="arrowhead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                            <path d="M 0 0 L 10 5 L 0 10 z" fill="#0ea5e9" />
-                        </marker>
-                    </defs>
-                    {arrowPaths.map(path => (
-                         <path key={path.id} d={path.d} stroke="#0ea5e9" strokeWidth="2" fill="none" markerEnd="url(#arrowhead)" />
-                    ))}
-                </svg>
-                <div className="relative">
-                    <div className="absolute top-0 left-0 h-full w-full pointer-events-none"><div className="absolute top-0 bottom-0 w-0.5 bg-red-500 opacity-75 z-20" style={{ left: `${SIDEBAR_WIDTH + todayMarkerPosition}px`}}></div></div>
-                    {projectsWithData.map((project, projIndex) => (
-                    <div key={project.id} className="group/project relative">
-                        <div onClick={() => setSelectedProjectId(project.id)} className={`flex items-center justify-between p-2 px-4 sticky left-0 z-10 cursor-pointer transition-all border-b border-r ${selectedProjectId === project.id ? 'bg-blue-200 border-l-4 border-blue-600' : 'bg-gray-200'}`} style={{height: `${PROJECT_HEADER_HEIGHT}px`, width: `${SIDEBAR_WIDTH}px`}}>
-                           <div className="flex items-center gap-3 flex-grow overflow-hidden"><span className="w-4 h-4 rounded-full flex-shrink-0" style={{backgroundColor: project.color}}></span> <div className="flex-grow overflow-hidden"><h3 className="font-bold text-gray-800 truncate">{project.name}</h3> <div className="w-full bg-gray-300 rounded-full h-1.5 mt-1"><div className="bg-green-500 h-1.5 rounded-full" style={{width: `${project.projectCompletionPercentage.toFixed(0)}%`}}></div></div><span className="text-xs text-gray-500">{project.projectCompletionPercentage.toFixed(1)}%</span></div></div><div className="flex items-center gap-2 flex-shrink-0 opacity-0 group-hover/project:opacity-100 transition-opacity"><button onClick={(e) => {e.stopPropagation(); handleEditProject(project)}} className="text-gray-500 hover:text-blue-600"><Edit size={16}/></button><button onClick={(e) => {e.stopPropagation(); confirmDeleteItem(project, 'project')}} className="text-gray-500 hover:text-red-600"><Trash2 size={16}/></button></div>
-                        </div>
-                        {project.tasks.map(task => {
-                            const pos = taskPositions.get(task.id);
-                            return (
-                                <div key={task.id} className="flex border-b border-gray-200 relative" style={{height: `${ROW_HEIGHT}px`}} onDoubleClick={() => handleEditTask(task)}>
-                                    <div className="sticky left-0 w-96 z-10 bg-gray-50 flex items-center group/task p-2 pl-9 border-r">
-                                        <div className="flex-grow overflow-hidden"><p className="font-medium text-gray-900 truncate">{task.name}</p><div className="flex flex-wrap gap-1 mt-1">{task.assignedResources?.map(resId => { const r = getResourceById(resId); return r ? <span key={resId} className="text-xs bg-gray-200 text-gray-800 px-1.5 py-0.5 rounded-full">{r.name}</span> : null; })}</div></div>
-                                        <div className="flex items-center opacity-0 group-hover/task:opacity-100 transition-opacity">
-                                            <button onClick={(e) => {e.stopPropagation(); handleEditTask(task)}} className="p-1 text-gray-500 hover:text-blue-600"><Edit size={16}/></button>
-                                            <button onClick={(e) => {e.stopPropagation(); confirmDeleteItem(task, 'task')}} className="p-1 text-gray-500 hover:text-red-600"><Trash2 size={16}/></button>
+                {view === 'gantt' ? (
+                    <div className="h-full w-full overflow-auto" ref={ganttContainerRef} onDrop={handleGanttDrop} onDragOver={e => e.preventDefault()}>
+                        <div className="grid" style={{ gridTemplateColumns: `${SIDEBAR_WIDTH}px 1fr`, width: `${SIDEBAR_WIDTH + dateHeaders.length * DAY_WIDTH}px` }}>
+                            {/* Colonna Sinistra (Sidebar) */}
+                            <div className="sticky left-0 z-20 bg-gray-50">
+                                <div className="sticky top-0 z-10 flex items-center justify-between h-12 px-4 border-b border-r bg-gray-100"><span className="font-semibold text-gray-700">Progetti</span><button onClick={() => exportToPDF('gantt')} className="text-blue-600 hover:text-blue-800 p-1"><FileDown size={18}/></button></div>
+                                {projectsWithData.map(project => (
+                                    <div key={project.id} className="group/project">
+                                        <div onClick={() => setSelectedProjectId(project.id)} className={`flex items-center justify-between p-2 px-4 cursor-pointer transition-all border-b border-r ${selectedProjectId === project.id ? 'bg-blue-200 border-l-4 border-blue-600' : 'bg-white'}`} style={{height: `${PROJECT_HEADER_HEIGHT}px`}}>
+                                            <div className="flex items-center gap-3 flex-grow overflow-hidden"><span className="w-4 h-4 rounded-full flex-shrink-0" style={{backgroundColor: project.color}}></span> <div className="flex-grow overflow-hidden"><h3 className="font-bold text-gray-800 truncate">{project.name}</h3> <div className="w-full bg-gray-300 rounded-full h-1.5 mt-1"><div className="bg-green-500 h-1.5 rounded-full" style={{width: `${project.projectCompletionPercentage.toFixed(0)}%`}}></div></div><span className="text-xs text-gray-500">{project.projectCompletionPercentage.toFixed(1)}%</span></div></div><div className="flex items-center gap-2 flex-shrink-0 opacity-0 group-hover/project:opacity-100 transition-opacity"><button onClick={(e) => {e.stopPropagation(); handleEditProject(project)}} className="p-1 text-gray-500 hover:text-blue-600"><Edit size={16}/></button><button onClick={(e) => {e.stopPropagation(); confirmDeleteItem(project, 'project')}} className="p-1 text-gray-500 hover:text-red-600"><Trash2 size={16}/></button></div>
                                         </div>
+                                        {project.tasks.map(task => (
+                                            <div key={task.id} className="flex items-center group/task p-2 pl-9 border-b border-r bg-gray-50" style={{height: `${ROW_HEIGHT}px`}} onDoubleClick={() => handleEditTask(task)}>
+                                                <div className="flex-grow overflow-hidden"><p className="font-medium text-gray-900 truncate">{task.name}</p><div className="flex flex-wrap gap-1 mt-1">{task.assigned?.map(r => <span key={r.id} className="text-xs bg-gray-200 text-gray-800 px-1.5 py-0.5 rounded-full">{r.name}</span>)}</div></div>
+                                                <div className="flex items-center opacity-0 group-hover/task:opacity-100 transition-opacity"><button onClick={(e) => {e.stopPropagation(); handleEditTask(task)}} className="p-1 text-gray-500 hover:text-blue-600"><Edit size={16}/></button><button onClick={(e) => {e.stopPropagation(); confirmDeleteItem(task, 'task')}} className="p-1 text-gray-500 hover:text-red-600"><Trash2 size={16}/></button></div>
+                                            </div>
+                                        ))} 
+                                        {project.tasks.length === 0 && <div className="pl-9 text-xs text-gray-500 italic h-full flex items-center border-b border-r" style={{height: `${ROW_HEIGHT}px`}}>Nessuna attività.</div>}
                                     </div>
-                                    {pos && <div className="absolute flex items-center" style={{ top: 0, height: '100%', left: `${SIDEBAR_WIDTH + pos.left}px`, width: `${pos.width}px` }}>
-                                        <div draggable onDragStart={(e) => handleDragStart(e, task, 'move')} className="h-8 rounded-md shadow-sm flex items-center w-full group relative" style={{ backgroundColor: task.taskColor || project.color || '#3b82f6' }} title={task.notes}>
-                                            <div className="absolute top-0 left-0 h-full rounded-l-md" style={{width: `${task.completionPercentage || 0}%`, backgroundColor: 'rgba(0,0,0,0.2)'}}></div>
-                                            <div className={`absolute px-2 text-sm truncate font-medium z-10 ${getContrastingTextColor(task.taskColor || project.color)}`}>{task.name}</div>
-                                            <div draggable onDragStart={(e) => { e.stopPropagation(); handleDragStart(e, task, 'resize-start'); }} className="absolute left-0 top-0 w-2 h-full cursor-ew-resize z-20" />
-                                            <div draggable onDragStart={(e) => { e.stopPropagation(); handleDragStart(e, task, 'resize-end'); }} className="absolute right-0 top-0 w-2 h-full cursor-ew-resize z-20" />
+                                ))}
+                            </div>
+                            {/* Colonna Destra (Timeline) */}
+                            <div className="relative">
+                                <div className="sticky top-0 z-10 flex h-12 bg-white border-b">{dateHeaders.map((date) => { const isToday = date.toDateString() === today.toDateString(); return (<div key={date.toISOString()} className={`w-10 text-center border-r flex-shrink-0 flex flex-col justify-center ${isToday ? 'bg-red-200' : 'bg-gray-50'}`}><div className={`text-xs ${date.getDay() === 0 || date.getDay() === 6 ? 'text-red-500' : 'text-gray-500'}`}>{['D', 'L', 'M', 'M', 'G', 'V', 'S'][date.getDay()]}</div><div className={`text-sm font-semibold ${isToday ? 'text-red-600' : 'text-gray-800'}`}>{date.getDate()}</div></div>)})}</div>
+                                <div className="relative" style={{height: `${ganttHeight}px`}}>
+                                    <div className="absolute top-0 left-0 h-full w-0.5 bg-red-500 opacity-75 z-20" style={{ transform: `translateX(${todayMarkerPosition}px)`}}></div>
+                                    {projectsWithData.map(project => project.tasks.map(task => { const pos = taskPositions.get(task.id); if(!pos) return null; return (
+                                        <div key={task.id} className="absolute flex items-center" style={{ top: `${pos.top}px`, height: `${ROW_HEIGHT}px`, left: `${pos.left}px`, width: `${pos.width}px` }}>
+                                          <div draggable onDragStart={(e) => handleDragStart(e, task, 'move')} className="h-8 rounded-md shadow-sm flex items-center w-full group relative cursor-move" style={{ backgroundColor: task.taskColor || project.color || '#3b82f6' }} title={task.notes}>
+                                              <div className="absolute top-0 left-0 h-full rounded-l-md" style={{width: `${task.completionPercentage || 0}%`, backgroundColor: 'rgba(0,0,0,0.2)'}}></div>
+                                              <div className={`absolute px-2 text-sm truncate font-medium z-10 ${getContrastingTextColor(task.taskColor || project.color)}`}>{task.name}</div>
+                                              <div draggable onDragStart={(e) => { e.stopPropagation(); handleDragStart(e, task, 'resize-start'); }} className="absolute left-0 top-0 w-2 h-full cursor-ew-resize z-20" />
+                                              <div draggable onDragStart={(e) => { e.stopPropagation(); handleDragStart(e, task, 'resize-end'); }} className="absolute right-0 top-0 w-2 h-full cursor-ew-resize z-20" />
+                                          </div>
                                         </div>
-                                    </div>}
+                                    )}))}
+                                    <svg width="100%" height="100%" className="absolute top-0 left-0 z-10 pointer-events-none">
+                                      <defs> <marker id="arrowhead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"> <path d="M 0 0 L 10 5 L 0 10 z" fill="#0ea5e9" /> </marker> </defs>
+                                      {arrowPaths.map(path => (<path key={path.id} d={path.d} stroke="#0ea5e9" strokeWidth="2" fill="none" markerEnd="url(#arrowhead)" />))}
+                                    </svg>
                                 </div>
-                            )
-                        })} 
-                        {project.tasks.length === 0 && <div className="sticky left-0 w-96 bg-gray-50 border-r border-b" style={{height: `${ROW_HEIGHT}px`}}><div className="pl-9 text-xs text-gray-500 italic h-full flex items-center">Nessuna attività.</div></div>}
+                            </div>
+                        </div>
                     </div>
-                ))}</div></div></div>
                 ) : view === 'costReport' ? ( <CostReportView projectsWithData={projectsWithData} onExportPDF={() => exportToPDF('cost')} />
                 ) : view === 'assignmentReport' ? ( <AssignmentReportView projectsWithData={projectsWithData} resources={resources} onExportPDF={() => exportToPDF('assignment')} /> )
                 : ( <ActivityReportView projectsWithData={projectsWithData} onExportPDF={() => exportToPDF('activity')} /> )
                 }
             </main>
-             <Modal isOpen={isTaskModalOpen} onClose={() => setIsTaskModalOpen(false)} title={editingTask ? 'Modifica Attività' : 'Nuova Attività'}> <TaskForm db={db} projects={projects} task={editingTask} resources={resources} allTasks={tasks} onDone={() => setIsTaskModalOpen(false)} selectedProjectIdForNew={selectedProjectId} /> </Modal>
+             <Modal isOpen={isTaskModalOpen} onClose={() => {setEditingTask(null); setIsTaskModalOpen(false);}} title={editingTask ? 'Modifica Attività' : 'Nuova Attività'}> <TaskForm db={db} projects={projects} task={editingTask} resources={resources} allTasks={tasks} onDone={() => {setEditingTask(null); setIsTaskModalOpen(false);}} selectedProjectIdForNew={selectedProjectId} /> </Modal>
              <Modal isOpen={isResourceModalOpen} onClose={() => setIsResourceModalOpen(false)} title="Gestione Risorse"> <ResourceManagement resources={resources} db={db} /> </Modal>
              <Modal isOpen={isProjectModalOpen} onClose={() => {setEditingProject(null); setIsProjectModalOpen(false);}} title={editingProject && editingProject.id ? 'Modifica Progetto' : 'Nuovo Progetto'}> <ProjectForm project={editingProject} onDone={() => {setEditingProject(null); setIsProjectModalOpen(false);}} db={db} userId={userId} /> </Modal>
              <Modal isOpen={!!itemToDelete} onClose={() => setItemToDelete(null)} title="Conferma Eliminazione"> <div><div className="p-4 bg-red-100 border-l-4 border-red-500 text-red-700"> <p className="font-bold">ATTENZIONE!</p><p>Stai per eliminare {itemToDelete?.type === 'project' ? `il progetto "${itemToDelete.item.name}" e tutte le sue attività` : `l'attività "${itemToDelete?.item.name}"`}. Questa azione è irreversibile.</p></div> <div className="flex justify-end mt-4 gap-2"> <button onClick={() => setItemToDelete(null)} className="bg-gray-300 px-4 py-2 rounded-md">Annulla</button> <button onClick={handleDeleteItem} className="bg-red-600 text-white px-4 py-2 rounded-md">Elimina</button></div></div></Modal>
@@ -585,7 +532,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId }) => {
     );
 };
 
-// --- COMPONENTE APP ---
+// --- COMPONENTE RADICE ---
 export default function App() {
     const [db, setDb] = useState(null); const [userId, setUserId] = useState(null); const [isAuthReady, setIsAuthReady] = useState(false); const [projects, setProjects] = useState([]); const [tasks, setTasks] = useState([]); const [resources, setResources] = useState([]);
     
@@ -604,7 +551,7 @@ export default function App() {
         return () => { unsubProjects(); unsubTasks(); unsubResources(); };
     }, [isAuthReady, db]);
 
-    if (!isAuthReady) { return <div className="h-screen w-screen flex justify-center items-center bg-gray-100"><div className="text-xl font-semibold">Caricamento Gestione Progetti...</div></div>; }
+    if (!isAuthReady) { return <div className="h-screen w-screen flex justify-center items-center bg-gray-100"><div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500 mr-4"></div><div className="text-xl font-semibold">Caricamento Gestione Progetti...</div></div>; }
     
     return <MainDashboard projects={projects} tasks={tasks} resources={resources} db={db} userId={userId} />;
 }
