@@ -9,15 +9,19 @@ import { ArrowRight, Plus, Users, Trash2, Edit, LayoutDashboard, BarChart3, X, A
 const firebaseConfigString = import.meta.env.VITE_FIREBASE_CONFIG;
 const firebaseConfig = firebaseConfigString ? JSON.parse(firebaseConfigString) : {
 // INCOLLA QUI LA TUA CONFIGURAZIONE FIREBASE
-    apiKey: "AIzaSyC93XN4qJ1y1gnwdn7_U4EdfCY8zoOaSTQ",
-    authDomain: "project-multiutente.firebaseapp.com",
-    projectId: "project-multiutente",
-    storageBucket: "project-multiutente.firebasestorage.app",
-    messagingSenderId: "816026836521",
-    appId: "1:816026836521:web:06f217a85fb5f024050638",
-    measurementId: "G-VFP2J8G3FB"
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    appId: import.meta.env.VITE_FIREBASE_APP_ID,
+    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
+// Controllo di sicurezza aggiuntivo: verifica che le variabili siano state caricate
+if (!firebaseConfig.apiKey) {
+    console.error("Errore: configurazione di Firebase non trovata. Assicurati di aver creato un file .env.local con le variabili corrette (es. VITE_FIREBASE_API_KEY).");
+}
 
 // --- FUNZIONI UTILI (Invariate) ---
 const calculateDaysDifference = (d1, d2) => {
