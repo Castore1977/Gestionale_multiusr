@@ -6,9 +6,8 @@ import { ArrowRight, Plus, Users, Trash2, Edit, LayoutDashboard, BarChart3, X, A
 
 
 // --- CONFIGURAZIONE FIREBASE ---
-const firebaseConfig = JSON.parse(import.meta.env.VITE_FIREBASE_CONFIG || '{}');
-const appId = firebaseConfig.projectId || 'default-gantt-app-master';
-
+const firebaseConfigString = import.meta.env.VITE_FIREBASE_CONFIG;
+const firebaseConfig = firebaseConfigString ? JSON.parse(firebaseConfigString) : {
 // INCOLLA QUI LA TUA CONFIGURAZIONE FIREBASE
     apiKey: "AIzaSyC93XN4qJ1y1gnwdn7_U4EdfCY8zoOaSTQ",
     authDomain: "project-multiutente.firebaseapp.com",
