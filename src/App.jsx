@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
 import { getFirestore, collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, setDoc, query, where, writeBatch, getDocs } from 'firebase/firestore';
-import { ArrowRight, Plus, Users, Trash2, Edit, LayoutDashboard, BarChart3, X, AlertTriangle, FileDown, FileUp, CheckCircle,ClipboardList } from 'lucide-react';
+import { ArrowRight, Plus, Users, Trash2, Edit, LayoutDashboard, BarChart3, X, AlertTriangle, FileDown, FileUp, CheckCircle,ClipboardList, StickyNote } from 'lucide-react';
 
 // --- CONFIGURAZIONE FIREBASE ---
 const firebaseConfig = JSON.parse(import.meta.env.VITE_FIREBASE_CONFIG || '{}');
@@ -75,23 +75,23 @@ const Notification = ({ message, onClose, type = 'info' }) => {
 };
 
 const Modal = ({ children, isOpen, onClose, title }) => {
-  if (!isOpen) return null;
-  return (
+ if (!isOpen) return null;
+ return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex justify-center items-center p-4">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="p-4 border-b flex justify-between items-center sticky top-0 bg-white z-10"> <h3 className="text-xl font-semibold text-gray-800">{title}</h3> <button onClick={onClose} className="text-gray-500 hover:text-gray-800 text-2xl">&times;</button> </div>
         <div className="p-6">{children}</div>
       </div>
     </div>
-  );
+ );
 };
 
 const DatePicker = ({ value, onChange, ...props }) => {
-  const formatDate = (date) => {
-    if (!date) return '';
-    try { const d = new Date(date); const year = d.getFullYear(); const month = (d.getMonth() + 1).toString().padStart(2, '0'); const day = d.getDate().toString().padStart(2, '0'); return `${year}-${month}-${day}`; } catch(e) { return ''; }
-  };
-  return ( <input type="date" value={formatDate(value)} onChange={(e) => onChange(e.target.value)} className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm" {...props} /> );
+ const formatDate = (date) => {
+   if (!date) return '';
+   try { const d = new Date(date); const year = d.getFullYear(); const month = (d.getMonth() + 1).toString().padStart(2, '0'); const day = d.getDate().toString().padStart(2, '0'); return `${year}-${month}-${day}`; } catch(e) { return ''; }
+ };
+ return ( <input type="date" value={formatDate(value)} onChange={(e) => onChange(e.target.value)} className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm" {...props} /> );
 };
 
 // --- COMPONENTI SPECIFICI ---
@@ -234,16 +234,12 @@ const ActivityReportView = ({ projectsWithData, onExportPDF }) => {
                     <tbody className="bg-white divide-y divide-gray-200">
                         {reportData.overdueTasks.length > 0 && <tr className="bg-red-200"><td colSpan="6" className="px-4 py-2 text-sm font-bold text-red-800">SCADUTE E NON COMPLETATE</td></tr>}
                         {reportData.overdueTasks.map(renderTaskRow)}
-
                         {reportData.dueTodayTasks.length > 0 && <tr className="bg-red-100"><td colSpan="6" className="px-4 py-2 text-sm font-bold text-red-800">IN SCADENZA OGGI</td></tr>}
                         {reportData.dueTodayTasks.map(renderTaskRow)}
-                        
                         {reportData.dueInThreeDaysTasks.length > 0 && <tr className="bg-yellow-100"><td colSpan="6" className="px-4 py-2 text-sm font-bold text-yellow-800">IN SCADENZA A BREVE (3 GIORNI)</td></tr>}
                         {reportData.dueInThreeDaysTasks.map(renderTaskRow)}
-                        
                         {reportData.otherTasks.length > 0 && <tr className="bg-gray-100"><td colSpan="6" className="px-4 py-2 text-sm font-bold text-gray-700">ALTRE ATTIVITÀ</td></tr>}
                         {reportData.otherTasks.map(renderTaskRow)}
-                        
                         {reportData.overdueTasks.length === 0 && reportData.dueTodayTasks.length === 0 && reportData.dueInThreeDaysTasks.length === 0 && reportData.otherTasks.length === 0 && ( <tr><td colSpan="6" className="px-6 py-4 text-center text-sm text-gray-500">Nessuna attività da mostrare.</td></tr> )}
                     </tbody>
                 </table>
@@ -277,8 +273,15 @@ const AssignmentReportView = ({ projectsWithData, resources, onExportPDF }) => {
                     <div key={resource.id} className="mb-8">
                         <div className="p-3 bg-gray-100 border-b-2 border-gray-300"> <h3 className="text-lg font-bold text-gray-800">{resource.name}</h3> <p className="text-sm text-gray-600">Carico di lavoro odierno stimato: <span className="font-bold">{resource.dailyWorkload.toFixed(1)} ore</span></p> </div>
                         <table className="min-w-full">
-                            <thead className="bg-gray-50"> <tr> <th className="w-1/3 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Attività</th> <th className="w-1/3 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Progetto</th> <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scadenza</th> <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Avanzamento</th> </tr> </thead>
-                             <tbody className="bg-white divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="w-1/3 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Attività</th>
+                                    <th className="w-1/3 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Progetto</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scadenza</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Avanzamento</th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
                                 {resource.assignedTasks.length > 0 ? resource.assignedTasks.map(task => ( <tr key={task.id}> <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{task.name}</td> <td className="px-4 py-4 whitespace-nowrap text-sm"><div className="flex items-center"><span className="w-3 h-3 rounded-full mr-2" style={{backgroundColor: task.projectColor}}></span>{task.projectName}</div></td> <td className="px-4 py-4 whitespace-nowrap text-sm">{new Date(task.endDate).toLocaleDateString('it-IT')}</td> <td className="px-4 py-4 whitespace-nowrap"><div className="w-full bg-gray-200 rounded-full h-2.5"><div className="bg-blue-600 h-2.5 rounded-full" style={{width: `${task.completionPercentage || 0}%`}}></div></div><span className="text-xs text-gray-500">{task.completionPercentage || 0}%</span></td> </tr>
                                 )) : ( <tr><td colSpan="4" className="px-4 py-4 text-sm text-gray-500 italic">Nessuna attività assegnata.</td></tr> )}
                             </tbody>
@@ -304,15 +307,28 @@ const CostReportView = ({ projectsWithData, onExportPDF }) => {
              <div className="flex justify-between items-center mb-6"> <h2 className="text-2xl font-bold text-gray-800">Report Costi</h2> <button onClick={onExportPDF} className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 flex items-center gap-2"> <FileDown size={16}/> Esporta PDF </button> </div>
             <div id="cost-report-content" className="bg-white shadow-md rounded-lg overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50"><tr><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Attività</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Risorse</th><th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Costo Stimato</th><th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Costo Sostenuto</th></tr></thead>
-                     <tbody className="bg-white divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                        <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Attività</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Risorse</th>
+                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Costo Stimato</th>
+                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Costo Sostenuto</th>
+                        </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
                         {projects.flatMap(project => [
                             <tr key={project.id} className="bg-gray-100"><td colSpan="4" className={`px-6 py-3 text-sm font-bold ${getContrastingTextColor(project.color)}`} style={{backgroundColor: project.color}}><div className="flex justify-between"><span>{project.name}</span><span>{project.projectCompletionPercentage?.toFixed(1) || '0.0'}%</span></div></td></tr>,
                             ...(project.tasks.length > 0 ? project.tasks.map(task => ( <tr key={task.id}><td className="px-6 py-4 whitespace-nowrap"><p className="text-sm font-medium text-gray-900">{task.name}</p><p className="text-sm text-gray-500">{task.completionPercentage || 0}% completato</p></td><td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{task.assigned.map(r => r.name).join(', ') || 'N/A'}</td><td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">{formatCurrency(task.totalEstimatedCost)}</td><td className="px-6 py-4 whitespace-nowrap text-right text-sm">{formatCurrency(task.spentCost)}</td></tr> )) : [ <tr key={`${project.id}-empty`}><td colSpan="4" className="px-6 py-4 text-sm text-gray-500 italic">Nessuna attività.</td></tr> ]),
                             <tr key={`${project.id}-total`} className="bg-gray-50"><td colSpan="2" className="px-6 py-2 text-sm font-semibold text-right">Totale Progetto</td><td className="px-6 py-2 text-right text-sm font-semibold">{formatCurrency(project.projectTotalCost)}</td><td className="px-6 py-2 text-right text-sm font-semibold">{formatCurrency(project.projectSpentCost)}</td></tr>
                         ])}
                     </tbody>
-                    <tfoot className="bg-gray-200"><tr><td colSpan="2" className="px-6 py-4 text-base font-bold text-right">TOTALE GENERALE</td><td className="px-6 py-4 text-right text-base font-bold">{formatCurrency(grandTotalCost)}</td><td className="px-6 py-4 text-right text-base font-bold">{formatCurrency(grandSpentCost)}</td></tr></tfoot>
+                    <tfoot className="bg-gray-200">
+                        <tr>
+                            <td colSpan="2" className="px-6 py-4 text-base font-bold text-right">TOTALE GENERALE</td>
+                            <td className="px-6 py-4 text-right text-base font-bold">{formatCurrency(grandTotalCost)}</td>
+                            <td className="px-6 py-4 text-right text-base font-bold">{formatCurrency(grandSpentCost)}</td>
+                        </tr>
+                    </tfoot>
                 </table>
             </div>
         </div>
@@ -324,6 +340,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId }) => {
     const [view, setView] = useState('gantt'); const [isLoading, setIsLoading] = useState(false); const [loadingMessage, setLoadingMessage] = useState(''); const [notification, setNotification] = useState({ message: '', type: 'info' }); const [isTaskModalOpen, setIsTaskModalOpen] = useState(false); const [isResourceModalOpen, setIsResourceModalOpen] = useState(false); const [isProjectModalOpen, setIsProjectModalOpen] = useState(false); const [editingTask, setEditingTask] = useState(null); const [editingProject, setEditingProject] = useState(null); const [isImportConfirmOpen, setIsImportConfirmOpen] = useState(false); const [importFile, setImportFile] = useState(null); const [selectedProjectId, setSelectedProjectId] = useState(null); const dragInfo = useRef({}); const fileInputRef = useRef(null);
     const [itemToDelete, setItemToDelete] = useState(null);
     const ganttContainerRef = useRef(null);
+    const [tooltip, setTooltip] = useState({ visible: false, content: '', x: 0, y: 0 });
     
     // --- COSTANTI DI LAYOUT ---
     const ROW_HEIGHT = 64; 
@@ -426,7 +443,6 @@ const MainDashboard = ({ projects, tasks, resources, db, userId }) => {
         return paths;
     }, [tasks, taskPositions, DAY_WIDTH, ROW_HEIGHT]);
 
-    const getResourceById = useCallback((id) => resources.find(r => r.id === id), [resources]);
     const handleEditTask = (task) => { setEditingTask(tasks.find(t=>t.id === task.id)); setIsTaskModalOpen(true); };
     const handleEditProject = (project) => { setEditingProject(project); setIsProjectModalOpen(true); };
     const handleOpenNewProjectModal = () => { const existingColors = projects.map(p => p.color); let newColor; do { newColor = `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`; } while (existingColors.includes(newColor)); setEditingProject({ name: '', color: newColor }); setIsProjectModalOpen(true); };
@@ -462,6 +478,10 @@ const MainDashboard = ({ projects, tasks, resources, db, userId }) => {
     const importData = async () => { if (!importFile) return; setIsLoading(true); setLoadingMessage("Importazione in corso..."); const reader = new FileReader(); reader.onload = async (e) => { try { const data = JSON.parse(e.target.result); if (!data.projects || !data.tasks || !data.resources) { throw new Error("Formato file non valido."); } setLoadingMessage("Cancellazione dati esistenti..."); const collectionsToDelete = ['tasks', 'resources', 'projects']; for (const coll of collectionsToDelete) { const snapshot = await getDocs(collection(db, `/artifacts/${appId}/public/data/${coll}`)); const batch = writeBatch(db); snapshot.docs.forEach(d => batch.delete(d.ref)); await batch.commit(); } setLoadingMessage("Importazione nuovi dati..."); const importBatch = writeBatch(db); data.projects.forEach(p => importBatch.set(doc(collection(db, `/artifacts/${appId}/public/data/projects`), p.id), p)); data.tasks.forEach(t => importBatch.set(doc(collection(db, `/artifacts/${appId}/public/data/tasks`), t.id), t)); data.resources.forEach(r => importBatch.set(doc(collection(db, `/artifacts/${appId}/public/data/resources`), r.id), r)); await importBatch.commit(); setNotification({message: "Importazione completata!", type: "success"}); } catch (error) { console.error("Errore importazione:", error); setNotification({message: `Errore importazione: ${error.message}`, type: "error"}); } finally { setIsLoading(false); setImportFile(null); setIsImportConfirmOpen(false); } }; reader.readAsText(importFile); };
     const exportToPDF = (reportType) => { const { jsPDF } = window.jspdf; if (typeof jsPDF === 'undefined' || (reportType==='gantt' && typeof window.html2canvas === 'undefined')) { setNotification({message: "Libreria PDF non caricata. Riprova.", type: "error"}); return; } setIsLoading(true); setLoadingMessage(`Esportazione ${reportType}...`); const timestamp = new Date().toLocaleString('sv-SE').replace(/ /g, '_').replace(/:/g, '-'); if(reportType === 'cost' || reportType === 'activity' || reportType === 'assignment') { const content = document.getElementById(`${reportType}-report-content`); const title = reportType === 'cost' ? 'Report Costi' : reportType === 'activity' ? 'Report Attività' : 'Report Assegnazioni'; const doc = new jsPDF(); doc.autoTable({ html: `#${reportType}-report-content table`, startY: 20, didParseCell: function(data) { const raw = data.cell.raw; if (raw.nodeName === 'TD' || raw.nodeName === 'TH') { data.cell.styles.fillColor = window.getComputedStyle(raw).backgroundColor; const fontColor = getContrastingTextColor(data.cell.styles.fillColor); data.cell.styles.textColor = fontColor === 'text-black' ? '#000000' : '#ffffff'; data.cell.styles.halign = data.cell.raw.style.textAlign || 'left'; } } }); doc.text(title, 14, 15); doc.save(`report_${reportType}_${timestamp}.pdf`); setIsLoading(false); } else if (reportType === 'gantt') { const ganttElement = ganttContainerRef.current; window.html2canvas(ganttElement, { useCORS: true, scale: 1.5, width: ganttElement.scrollWidth, height: ganttElement.scrollHeight, windowWidth: ganttElement.scrollWidth, windowHeight: ganttElement.scrollHeight, }).then(canvas => { const imgData = canvas.toDataURL('image/png'); const imgWidth = 280; const pageHeight = 190; const imgHeight = canvas.height * imgWidth / canvas.width; let heightLeft = imgHeight; const doc = new jsPDF('l', 'mm', 'a4'); let position = 10; doc.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight); heightLeft -= pageHeight; while (heightLeft > 0) { position = heightLeft - imgHeight + 10; doc.addPage(); doc.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight); heightLeft -= pageHeight; } doc.save(`gantt_chart_${timestamp}.pdf`); setIsLoading(false); }).catch(() => setIsLoading(false)); } };
     
+    const handleShowTooltip = (e, content) => { if (!content || content.trim() === '') return; setTooltip({ visible: true, content, x: e.clientX + 10, y: e.clientY + 10 }); };
+    const handleMoveTooltip = (e) => { if (tooltip.visible) { setTooltip(prev => ({ ...prev, x: e.clientX + 10, y: e.clientY + 10 })); }};
+    const handleHideTooltip = () => { setTooltip(prev => ({ ...prev, visible: false })); };
+
     const today = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d; }, []);
     const todayMarkerPosition = useMemo(() => { if (dateHeaders.length === 0) return -1; return calculateDaysDifference(dateHeaders[0], today) * DAY_WIDTH; }, [dateHeaders, today]);
 
@@ -469,6 +489,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId }) => {
         <div className="h-screen w-screen bg-gray-100 flex flex-col font-sans">
             {isLoading && <Loader message={loadingMessage} />}
             <Notification message={notification.message} type={notification.type} onClose={() => setNotification({message: ''})} />
+            {tooltip.visible && <div className="fixed bg-gray-800 text-white text-sm rounded-md px-3 py-2 z-50 pointer-events-none max-w-xs whitespace-pre-wrap shadow-lg" style={{ top: `${tooltip.y}px`, left: `${tooltip.x}px` }}>{tooltip.content}</div>}
             <header className="p-4 border-b flex items-center justify-between bg-white shadow-sm flex-wrap gap-2">
                 <div className="flex items-center gap-4"> <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1> <div className="flex items-center gap-1 rounded-lg bg-gray-200 p-1"> <button onClick={() => setView('gantt')} className={`px-2 py-1 text-sm font-medium rounded-md flex items-center gap-1 ${view==='gantt' ? 'bg-white shadow' : 'text-gray-600'}`}><LayoutDashboard size={16}/> Gantt</button> <button onClick={() => setView('assignmentReport')} className={`px-2 py-1 text-sm font-medium rounded-md flex items-center gap-1 ${view==='assignmentReport' ? 'bg-white shadow' : 'text-gray-600'}`}><ClipboardList size={16}/> Assegnazioni</button> <button onClick={() => setView('activityReport')} className={`px-2 py-1 text-sm font-medium rounded-md flex items-center gap-1 ${view==='activityReport' ? 'bg-white shadow' : 'text-gray-600'}`}><BarChart3 size={16}/> Attività</button> <button onClick={() => setView('costReport')} className={`px-2 py-1 text-sm font-medium rounded-md flex items-center gap-1 ${view==='costReport' ? 'bg-white shadow' : 'text-gray-600'}`}><BarChart3 size={16}/> Costi</button> </div> </div>
                 <div className="flex items-center gap-2 flex-wrap"> <button onClick={exportData} className="bg-gray-600 text-white px-3 py-2 rounded-md hover:bg-gray-700 flex items-center gap-2 text-sm"><FileDown size={16}/> Esporta Dati</button> <button onClick={() => fileInputRef.current.click()} className="bg-gray-600 text-white px-3 py-2 rounded-md hover:bg-gray-700 flex items-center gap-2 text-sm"><FileUp size={16}/> Importa Dati</button> <input type="file" ref={fileInputRef} onChange={handleFileImportChange} accept=".json" className="hidden"/> <button onClick={handleOpenNewProjectModal} className="bg-purple-600 text-white px-3 py-2 rounded-md hover:bg-purple-700 flex items-center gap-2 text-sm"> <Plus size={16} /> Progetto </button> <button onClick={() => setIsResourceModalOpen(true)} className="bg-yellow-500 text-white px-3 py-2 rounded-md hover:bg-yellow-600 flex items-center gap-2 text-sm"> <Users size={16} /> Risorse </button> <button onClick={() => { setEditingTask(null); setIsTaskModalOpen(true); }} className="bg-blue-500 text-white px-3 py-2 rounded-md hover:bg-blue-600 flex items-center gap-2 text-sm"> <Plus size={16} /> Attività </button> </div>
@@ -502,12 +523,23 @@ const MainDashboard = ({ projects, tasks, resources, db, userId }) => {
                                     <div className="absolute top-0 left-0 h-full w-0.5 bg-red-500 opacity-75 z-20" style={{ transform: `translateX(${todayMarkerPosition}px)`}}></div>
                                     {projectsWithData.map(project => project.tasks.map(task => { const pos = taskPositions.get(task.id); if(!pos) return null; return (
                                         <div key={task.id} className="absolute flex items-center" style={{ top: `${pos.top}px`, height: `${ROW_HEIGHT}px`, left: `${pos.left}px`, width: `${pos.width}px` }}>
-                                          <div draggable onDragStart={(e) => handleDragStart(e, task, 'move')} className="h-8 rounded-md shadow-sm flex items-center w-full group relative cursor-move" style={{ backgroundColor: task.taskColor || project.color || '#3b82f6' }} title={task.notes}>
-                                              <div className="absolute top-0 left-0 h-full rounded-l-md" style={{width: `${task.completionPercentage || 0}%`, backgroundColor: 'rgba(0,0,0,0.2)'}}></div>
-                                              <div className={`absolute px-2 text-sm truncate font-medium z-10 ${getContrastingTextColor(task.taskColor || project.color)}`}>{task.name}</div>
-                                              <div draggable onDragStart={(e) => { e.stopPropagation(); handleDragStart(e, task, 'resize-start'); }} className="absolute left-0 top-0 w-2 h-full cursor-ew-resize z-20" />
-                                              <div draggable onDragStart={(e) => { e.stopPropagation(); handleDragStart(e, task, 'resize-end'); }} className="absolute right-0 top-0 w-2 h-full cursor-ew-resize z-20" />
-                                          </div>
+                                            <div draggable onDragStart={(e) => handleDragStart(e, task, 'move')} onDoubleClick={() => handleEditTask(task)} onMouseEnter={(e) => handleShowTooltip(e, task.notes)} onMouseMove={handleMoveTooltip} onMouseLeave={handleHideTooltip} className="h-8 rounded-md shadow-sm flex items-center w-full group relative cursor-move" style={{ backgroundColor: task.taskColor || project.color || '#3b82f6' }}>
+                                                <div className="absolute top-0 left-0 h-full rounded-l-md" style={{width: `${task.completionPercentage || 0}%`, backgroundColor: 'rgba(0,0,0,0.2)'}}></div>
+                                                <div className="relative z-10 flex items-center justify-between w-full px-2">
+                                                    <span className={`text-sm truncate font-medium ${getContrastingTextColor(task.taskColor || project.color)}`}>
+                                                        {task.name}
+                                                    </span>
+                                                    {task.notes && task.notes.trim() !== '' && (
+                                                        <StickyNote
+                                                            size={16}
+                                                            className={`flex-shrink-0 ${getContrastingTextColor(task.taskColor || project.color)}`}
+                                                            aria-label="Questa attività ha una nota"
+                                                        />
+                                                    )}
+                                                </div>
+                                                <div draggable onDragStart={(e) => { e.stopPropagation(); handleDragStart(e, task, 'resize-start'); }} className="absolute left-0 top-0 w-2 h-full cursor-ew-resize z-20" />
+                                                <div draggable onDragStart={(e) => { e.stopPropagation(); handleDragStart(e, task, 'resize-end'); }} className="absolute right-0 top-0 w-2 h-full cursor-ew-resize z-20" />
+                                            </div>
                                         </div>
                                     )}))}
                                     <svg width="100%" height="100%" className="absolute top-0 left-0 z-10 pointer-events-none">
