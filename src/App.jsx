@@ -9,18 +9,18 @@ import { ArrowRight, Plus, Users, Trash2, Edit, LayoutDashboard, BarChart3, X, A
 const firebaseConfigString = import.meta.env.VITE_FIREBASE_CONFIG;
 const firebaseConfig = firebaseConfigString ? JSON.parse(firebaseConfigString) : {
 // INCOLLA QUI LA TUA CONFIGURAZIONE FIREBASE
-    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-    appId: import.meta.env.VITE_FIREBASE_APP_ID,
-    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    appId: import.meta.env.VITE_FIREBASE_APP_ID,
+    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
 // Controllo di sicurezza aggiuntivo: verifica che le variabili siano state caricate
 if (!firebaseConfig.apiKey) {
-    console.error("Errore: configurazione di Firebase non trovata. Assicurati di aver creato un file .env.local con le variabili corrette (es. VITE_FIREBASE_API_KEY).");
+    console.error("Errore: configurazione di Firebase non trovata. Assicurati di aver creato un file .env.local con le variabili corrette (es. VITE_FIREBASE_API_KEY).");
 }
 
 // --- FUNZIONI UTILI (Invariate) ---
@@ -82,23 +82,23 @@ const Notification = ({ message, onClose, type = 'info' }) => {
 };
 
 const Modal = ({ children, isOpen, onClose, title }) => {
- if (!isOpen) return null;
- return (
+ if (!isOpen) return null;
+ return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex justify-center items-center p-4">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="p-4 border-b flex justify-between items-center sticky top-0 bg-white z-10"> <h3 className="text-xl font-semibold text-gray-800">{title}</h3> <button onClick={onClose} className="text-gray-500 hover:text-gray-800 text-2xl">&times;</button> </div>
         <div className="p-6">{children}</div>
       </div>
     </div>
- );
+ );
 };
 
 const DatePicker = ({ value, onChange, ...props }) => {
- const formatDate = (date) => {
+ const formatDate = (date) => {
    if (!date) return '';
    try { const d = new Date(date); const year = d.getFullYear(); const month = (d.getMonth() + 1).toString().padStart(2, '0'); const day = d.getDate().toString().padStart(2, '0'); return `${year}-${month}-${day}`; } catch(e) { return ''; }
- };
- return ( <input type="date" value={formatDate(value)} onChange={(e) => onChange(e.target.value)} className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm" {...props} /> );
+ };
+ return ( <input type="date" value={formatDate(value)} onChange={(e) => onChange(e.target.value)} className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm" {...props} /> );
 };
 
 // --- COMPONENTI SPECIFICI (Aggiornati per multi-utente) ---
@@ -419,7 +419,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
     const handleOpenNewProjectModal = () => { const existingColors = projects.map(p => p.color); let newColor; do { newColor = `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`; } while (existingColors.includes(newColor)); setEditingProject({ name: '', color: newColor }); setIsProjectModalOpen(true); };
     const confirmDeleteItem = (item, type) => setItemToDelete({item, type});
     
-    // MODIFICATO: Usa percorsi utente-specifici
+    // MODIFICATO: Usa percorsi utente-specifici
     const handleDeleteItem = async () => {
         if (!itemToDelete || !userId) return;
         const { item, type } = itemToDelete;
@@ -443,30 +443,154 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
         } finally { setItemToDelete(null); setIsLoading(false); }
     };
     
-    // MODIFICATO: Usa percorsi utente-specifici
+    // MODIFICATO: Usa percorsi utente-specifici
     const handleGanttDrop = async (e) => { e.preventDefault(); if (!userId) return; const { taskId, type, initialX, initialStartDate, initialEndDate } = dragInfo.current; if (!taskId) return; const dateOffset = Math.round((e.clientX - initialX) / DAY_WIDTH); let newStartDate, newEndDate; const taskRef = doc(db, `users/${userId}/tasks`, taskId); if (type === 'move') { const duration = calculateDaysDifference(initialStartDate, initialEndDate); newStartDate = new Date(initialStartDate); newStartDate.setDate(newStartDate.getDate() + dateOffset); newEndDate = new Date(newStartDate); newEndDate.setDate(newEndDate.getDate() + duration); } else if (type === 'resize-end') { newStartDate = new Date(initialStartDate); newEndDate = new Date(initialEndDate); newEndDate.setDate(newEndDate.getDate() + dateOffset); if (newEndDate < newStartDate) newEndDate = newStartDate; } else if (type === 'resize-start') { newEndDate = new Date(initialEndDate); newStartDate = new Date(initialStartDate); newStartDate.setDate(newStartDate.getDate() + dateOffset); if (newStartDate > newEndDate) newStartDate = newEndDate; } else { return; } try { await updateDoc(taskRef, { startDate: newStartDate.toISOString().split('T')[0], endDate: newEndDate.toISOString().split('T')[0] }); } catch(error) { console.error("Errore aggiornamento task:", error); } dragInfo.current = {}; };
     const handleDragStart = (e, task, type) => { e.dataTransfer.effectAllowed = 'move'; dragInfo.current = { taskId: task.id, type, initialX: e.clientX, initialStartDate: task.startDate, initialEndDate: task.endDate }; };
 
     const exportData = () => { const dataToExport = { projects, tasks, resources, exportedAt: new Date().toISOString() }; const dataStr = JSON.stringify(dataToExport, null, 2); const blob = new Blob([dataStr], {type: "application/json"}); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `gantt_backup_${new Date().toISOString().split('T')[0]}.json`; document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url); setNotification({message: "Esportazione completata.", type: "success"}); };
     const handleFileImportChange = (e) => { const file = e.target.files[0]; if (file) { setImportFile(file); setIsImportConfirmOpen(true); } e.target.value = null; };
-    
-    // MODIFICATO: L'importazione sovrascrive i dati SOLO per l'utente corrente
-    const importData = async () => { if (!importFile || !userId) return; setIsLoading(true); setLoadingMessage("Importazione in corso..."); const reader = new FileReader(); reader.onload = async (e) => { try { const data = JSON.parse(e.target.result); if (!data.projects || !data.tasks || !data.resources) { throw new Error("Formato file non valido."); } setLoadingMessage("Cancellazione dati esistenti..."); const collectionsToDelete = ['tasks', 'resources', 'projects']; for (const coll of collectionsToDelete) { const userCollRef = collection(db, `users/${userId}/${coll}`); const snapshot = await getDocs(userCollRef); const batch = writeBatch(db); snapshot.docs.forEach(d => batch.delete(d.ref)); await batch.commit(); } setLoadingMessage("Importazione nuovi dati..."); const importBatch = writeBatch(db); data.projects.forEach(p => importBatch.set(doc(collection(db, `users/${userId}/projects`)), p)); data.tasks.forEach(t => importBatch.set(doc(collection(db, `users/${userId}/tasks`)), t)); data.resources.forEach(r => importBatch.set(doc(collection(db, `users/${userId}/resources`)), r)); await importBatch.commit(); setNotification({message: "Importazione completata!", type: "success"}); } catch (error) { console.error("Errore importazione:", error); setNotification({message: `Errore importazione: ${error.message}`, type: "error"}); } finally { setIsLoading(false); setImportFile(null); setIsImportConfirmOpen(false); } }; reader.readAsText(importFile); };
-    
-    const exportToPDF = (reportType) => { const { jsPDF } = window.jspdf; if (typeof jsPDF === 'undefined' || (reportType==='gantt' && typeof window.html2canvas === 'undefined')) { setNotification({message: "Libreria PDF non caricata. Riprova.", type: "error"}); return; } setIsLoading(true); setLoadingMessage(`Esportazione ${reportType}...`); const timestamp = new Date().toLocaleString('sv-SE').replace(/ /g, '_').replace(/:/g, '-'); if(reportType === 'cost' || reportType === 'activity' || reportType === 'assignment') { const content = document.getElementById(`${reportType}-report-content`); const title = reportType === 'cost' ? 'Report Costi' : reportType === 'activity' ? 'Report Attività' : 'Report Assegnazioni'; const doc = new jsPDF(); doc.autoTable({ html: `#${reportType}-report-content table`, startY: 20, didParseCell: function(data) { const raw = data.cell.raw; if (raw.nodeName === 'TD' || raw.nodeName === 'TH') { data.cell.styles.fillColor = window.getComputedStyle(raw).backgroundColor; const fontColor = getContrastingTextColor(data.cell.styles.fillColor); data.cell.styles.textColor = fontColor === 'text-black' ? '#000000' : '#ffffff'; data.cell.styles.halign = data.cell.raw.style.textAlign || 'left'; } } }); doc.text(title, 14, 15); doc.save(`report_${reportType}_${timestamp}.pdf`); setIsLoading(false); } else if (reportType === 'gantt') { const ganttElement = ganttContainerRef.current; window.html2canvas(ganttElement, { useCORS: true, scale: 1.5, width: ganttElement.scrollWidth, height: ganttElement.scrollHeight, windowWidth: ganttElement.scrollWidth, windowHeight: ganttElement.scrollHeight, }).then(canvas => { const imgData = canvas.toDataURL('image/png'); const imgWidth = 280; const pageHeight = 190; const imgHeight = canvas.height * imgWidth / canvas.width; let heightLeft = imgHeight; const doc = new jsPDF('l', 'mm', 'a4'); let position = 10; doc.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight); heightLeft -= pageHeight; while (heightLeft > 0) { position = heightLeft - imgHeight + 10; doc.addPage(); doc.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight); heightLeft -= pageHeight; } doc.save(`gantt_chart_${timestamp}.pdf`); setIsLoading(false); }).catch(() => setIsLoading(false)); } };
     
+    // MODIFICATO: L'importazione sovrascrive i dati SOLO per l'utente corrente
+    const importData = async () => { if (!importFile || !userId) return; setIsLoading(true); setLoadingMessage("Importazione in corso..."); const reader = new FileReader(); reader.onload = async (e) => { try { const data = JSON.parse(e.target.result); if (!data.projects || !data.tasks || !data.resources) { throw new Error("Formato file non valido."); } setLoadingMessage("Cancellazione dati esistenti..."); const collectionsToDelete = ['tasks', 'resources', 'projects']; for (const coll of collectionsToDelete) { const userCollRef = collection(db, `users/${userId}/${coll}`); const snapshot = await getDocs(userCollRef); const batch = writeBatch(db); snapshot.docs.forEach(d => batch.delete(d.ref)); await batch.commit(); } setLoadingMessage("Importazione nuovi dati..."); const importBatch = writeBatch(db); data.projects.forEach(p => importBatch.set(doc(collection(db, `users/${userId}/projects`)), p)); data.tasks.forEach(t => importBatch.set(doc(collection(db, `users/${userId}/tasks`)), t)); data.resources.forEach(r => importBatch.set(doc(collection(db, `users/${userId}/resources`)), r)); await importBatch.commit(); setNotification({message: "Importazione completata!", type: "success"}); } catch (error) { console.error("Errore importazione:", error); setNotification({message: `Errore importazione: ${error.message}`, type: "error"}); } finally { setIsLoading(false); setImportFile(null); setIsImportConfirmOpen(false); } }; reader.readAsText(importFile); };
+    
+    {/********* INIZIO CODICE MODIFICATO *********/}
+    const exportToPDF = (reportType) => {
+        const { jsPDF } = window.jspdf;
+        if (typeof jsPDF === 'undefined' || (reportType === 'gantt' && typeof window.html2canvas === 'undefined')) {
+            setNotification({ message: "Libreria PDF non caricata. Riprova.", type: "error" });
+            return;
+        }
+
+        setIsLoading(true);
+        setLoadingMessage(`Esportazione ${reportType}...`);
+
+        const rgbToHex = (col) => {
+            if (!col || !col.startsWith('rgb')) return '#FFFFFF';
+            try {
+                const rgb = col.replace(/[^\d,]/g, '').split(',');
+                const r = parseInt(rgb[0], 10).toString(16).padStart(2, '0');
+                const g = parseInt(rgb[1], 10).toString(16).padStart(2, '0');
+                const b = parseInt(rgb[2], 10).toString(16).padStart(2, '0');
+                return `#${r}${g}${b}`;
+            } catch (e) {
+                return '#FFFFFF'; // Fallback color
+            }
+        };
+
+        const commonAutoTableOptions = {
+            didParseCell: function(data) {
+                const raw = data.cell.raw;
+                if (raw && (raw.nodeName === 'TD' || raw.nodeName === 'TH')) {
+                    const computedStyle = window.getComputedStyle(raw);
+                    data.cell.styles.fillColor = computedStyle.backgroundColor;
+                    const hexColor = rgbToHex(computedStyle.backgroundColor);
+                    const fontColor = getContrastingTextColor(hexColor);
+                    data.cell.styles.textColor = fontColor === 'text-black' ? '#000000' : '#FFFFFF';
+                    data.cell.styles.halign = raw.style.textAlign || 'left';
+                }
+            }
+        };
+
+        const timestamp = new Date().toLocaleString('sv-SE').replace(/ /g, '_').replace(/:/g, '-');
+
+        if (reportType === 'gantt') {
+            const ganttElement = ganttContainerRef.current;
+            window.html2canvas(ganttElement, { useCORS: true, scale: 1.5, width: ganttElement.scrollWidth, height: ganttElement.scrollHeight, windowWidth: ganttElement.scrollWidth, windowHeight: ganttElement.scrollHeight })
+            .then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                const doc = new jsPDF('l', 'mm', 'a4');
+                const imgWidth = 280;
+                const pageHeight = 190;
+                const imgHeight = canvas.height * imgWidth / canvas.width;
+                let heightLeft = imgHeight;
+                let position = 10;
+                doc.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+                while (heightLeft > 0) {
+                    position = heightLeft - imgHeight + 10;
+                    doc.addPage();
+                    doc.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+                    heightLeft -= pageHeight;
+                }
+                doc.save(`gantt_chart_${timestamp}.pdf`);
+            })
+            .catch((err) => {
+                 console.error("Gantt export error:", err);
+                 setNotification({ message: "Errore durante l'esportazione del Gantt.", type: 'error' });
+            })
+            .finally(() => {
+                setIsLoading(false);
+            });
+            return;
+        }
+        
+        const doc = new jsPDF();
+        try {
+            if (reportType === 'cost' || reportType === 'activity') {
+                const title = reportType === 'cost' ? 'Report Costi' : 'Report Attività';
+                doc.text(title, 14, 15);
+                doc.autoTable({
+                    html: `#${reportType}-report-content table`,
+                    startY: 20,
+                    ...commonAutoTableOptions
+                });
+            } else if (reportType === 'assignment') {
+                const content = document.getElementById('assignment-report-content');
+                doc.text('Report Assegnazioni', 14, 15);
+                let startY = 20;
+                const resourceDivs = content.querySelectorAll(':scope > div');
+                resourceDivs.forEach((div) => {
+                    const h3 = div.querySelector('h3');
+                    const p = div.querySelector('p');
+                    const table = div.querySelector('table');
+                    
+                    if (startY > 250) { 
+                       doc.addPage();
+                       startY = 15;
+                    }
+                    
+                    if (h3) {
+                        doc.setFontSize(12).setFont(undefined, 'bold');
+                        doc.text(h3.innerText, 14, startY);
+                        startY += 6;
+                    }
+                    if (p) {
+                        doc.setFontSize(10).setFont(undefined, 'normal');
+                        doc.text(p.innerText, 14, startY);
+                        startY += 4;
+                    }
+                    if (table) {
+                        doc.autoTable({
+                            html: table,
+                            startY: startY,
+                            ...commonAutoTableOptions
+                        });
+                        startY = doc.autoTable.previous.finalY + 10;
+                    }
+                });
+            }
+            doc.save(`report_${reportType}_${timestamp}.pdf`);
+        } catch (e) {
+            console.error("PDF export error:", e);
+            setNotification({ message: "Errore durante la creazione del PDF.", type: 'error' });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+    {/********* FINE CODICE MODIFICATO *********/}
+
     const handleShowTooltip = (e, content) => { if (!content || content.trim() === '') return; setTooltip({ visible: true, content, x: e.clientX + 10, y: e.clientY + 10 }); };
     const handleMoveTooltip = (e) => { if (tooltip.visible) { setTooltip(prev => ({ ...prev, x: e.clientX + 10, y: e.clientY + 10 })); }};
     const handleHideTooltip = () => { setTooltip(prev => ({ ...prev, visible: false })); };
 
-    const handleLogout = async () => {
-        try {
-            await signOut(auth);
-        } catch (error) {
-            console.error("Errore durante il logout:", error);
-            setNotification({message: `Errore logout: ${error.message}`, type: "error"});
-        }
-    };
+    const handleLogout = async () => {
+        try {
+            await signOut(auth);
+        } catch (error) {
+            console.error("Errore durante il logout:", error);
+            setNotification({message: `Errore logout: ${error.message}`, type: "error"});
+        }
+    };
 
     const today = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d; }, []);
     const todayMarkerPosition = useMemo(() => { if (dateHeaders.length === 0) return -1; return calculateDaysDifference(dateHeaders[0], today) * DAY_WIDTH; }, [dateHeaders, today]);
@@ -544,72 +668,72 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
 
 // --- NUOVO COMPONENTE: Schermata di Autenticazione ---
 const AuthScreen = ({ auth, setNotification }) => {
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [isLogin, setIsLogin] = useState(true);
-    const [isLoading, setIsLoading] = useState(false);
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [isLogin, setIsLogin] = useState(true);
+    const [isLoading, setIsLoading] = useState(false);
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        if (!email || !password) {
-            setNotification({ message: 'Email e password sono obbligatori.', type: 'error' });
-            return;
-        }
-        setIsLoading(true);
-        try {
-            if (isLogin) {
-                await signInWithEmailAndPassword(auth, email, password);
-            } else {
-                await createUserWithEmailAndPassword(auth, email, password);
-            }
-            // Non serve più fare nulla qui, l'observer onAuthStateChanged farà il resto
-        } catch (error) {
-            console.error(`Errore durante ${isLogin ? 'il login' : 'la registrazione'}:`, error);
-            setNotification({ message: error.message, type: 'error' });
-        } finally {
-            setIsLoading(false);
-        }
-    };
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!email || !password) {
+            setNotification({ message: 'Email e password sono obbligatori.', type: 'error' });
+            return;
+        }
+        setIsLoading(true);
+        try {
+            if (isLogin) {
+                await signInWithEmailAndPassword(auth, email, password);
+            } else {
+                await createUserWithEmailAndPassword(auth, email, password);
+            }
+            // Non serve più fare nulla qui, l'observer onAuthStateChanged farà il resto
+        } catch (error) {
+            console.error(`Errore durante ${isLogin ? 'il login' : 'la registrazione'}:`, error);
+            setNotification({ message: error.message, type: 'error' });
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
-    return (
-        <div className="min-h-screen bg-gray-100 flex flex-col justify-center items-center p-4">
-            <div className="max-w-md w-full bg-white shadow-md rounded-lg p-8">
-                <h2 className="text-3xl font-bold text-center text-gray-800 mb-2">{isLogin ? 'Accedi' : 'Registrati'}</h2>
-                <p className="text-center text-gray-600 mb-8">Gestisci i tuoi progetti con facilità.</p>
-                <form onSubmit={handleSubmit} className="space-y-6">
-                    <div>
-                        <label htmlFor="email" className="block text-sm font-medium text-gray-700">Indirizzo Email</label>
-                        <input id="email" name="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500"/>
-                    </div>
-                    <div>
-                        <label htmlFor="password"className="block text-sm font-medium text-gray-700">Password</label>
-                        <input id="password" name="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500" />
-                    </div>
-                    <div>
-                        <button type="submit" disabled={isLoading} className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-300">
-                            {isLoading ? <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div> : (isLogin ? 'Accedi' : 'Crea Account')}
-                        </button>
-                    </div>
-                </form>
-                <div className="text-center mt-6">
-                    <button onClick={() => setIsLogin(!isLogin)} className="text-sm text-blue-600 hover:text-blue-500">
-                        {isLogin ? 'Non hai un account? Registrati' : 'Hai già un account? Accedi'}
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
+    return (
+        <div className="min-h-screen bg-gray-100 flex flex-col justify-center items-center p-4">
+            <div className="max-w-md w-full bg-white shadow-md rounded-lg p-8">
+                <h2 className="text-3xl font-bold text-center text-gray-800 mb-2">{isLogin ? 'Accedi' : 'Registrati'}</h2>
+                <p className="text-center text-gray-600 mb-8">Gestisci i tuoi progetti con facilità.</p>
+                <form onSubmit={handleSubmit} className="space-y-6">
+                    <div>
+                        <label htmlFor="email" className="block text-sm font-medium text-gray-700">Indirizzo Email</label>
+                        <input id="email" name="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500"/>
+                    </div>
+                    <div>
+                        <label htmlFor="password"className="block text-sm font-medium text-gray-700">Password</label>
+                        <input id="password" name="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500" />
+                    </div>
+                    <div>
+                        <button type="submit" disabled={isLoading} className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-300">
+                            {isLoading ? <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div> : (isLogin ? 'Accedi' : 'Crea Account')}
+                        </button>
+                    </div>
+                </form>
+                <div className="text-center mt-6">
+                    <button onClick={() => setIsLogin(!isLogin)} className="text-sm text-blue-600 hover:text-blue-500">
+                        {isLogin ? 'Non hai un account? Registrati' : 'Hai già un account? Accedi'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
 };
 
 
 // --- COMPONENTE RADICE (Aggiornato per gestire l'autenticazione) ---
 export default function App() {
     const [app, setApp] = useState(null);
-    const [auth, setAuth] = useState(null);
-    const [db, setDb] = useState(null);
-    const [user, setUser] = useState(null);
+    const [auth, setAuth] = useState(null);
+    const [db, setDb] = useState(null);
+    const [user, setUser] = useState(null);
     const [isAuthReady, setIsAuthReady] = useState(false);
-    const [notification, setNotification] = useState({ message: '', type: 'info' });
+    const [notification, setNotification] = useState({ message: '', type: 'info' });
     const [projects, setProjects] = useState([]);
     const [tasks, setTasks] = useState([]);
     const [resources, setResources] = useState([]);
@@ -619,64 +743,64 @@ export default function App() {
         const scripts = [ { id: 'jspdf', src: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js' }, { id: 'jspdf-autotable', src: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js' }, { id: 'html2canvas', src: 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js' } ];
         scripts.forEach(scriptInfo => { if (!document.getElementById(scriptInfo.id)) { const script = document.createElement('script'); script.id = scriptInfo.id; script.src = scriptInfo.src; script.async = false; document.head.appendChild(script); } });
         
-        try { 
-            if (Object.keys(firebaseConfig).length > 0 && firebaseConfig.apiKey) { 
-                const initializedApp = initializeApp(firebaseConfig); 
-                const authInstance = getAuth(initializedApp);
-                const firestoreInstance = getFirestore(initializedApp);
-                setApp(initializedApp);
-                setAuth(authInstance);
-                setDb(firestoreInstance); 
-                
-                // onAuthStateChanged è l'observer centrale che gestisce lo stato di login
-                const unsubscribe = onAuthStateChanged(authInstance, (currentUser) => {
-                    setUser(currentUser); // Imposta l'utente (o null se logout)
-                    setIsAuthReady(true); // Indica che il controllo auth è terminato
-                });
-                return () => unsubscribe(); // Pulisce l'observer quando il componente si smonta
-            } else { 
-                console.error("Configurazione Firebase non fornita o incompleta."); 
-                setIsAuthReady(true); // Permette di mostrare un errore se la config non c'è
-            } 
-        } catch(e) { 
-            console.error("Errore inizializzazione Firebase:", e); 
-            setIsAuthReady(true); 
-        }
+        try { 
+            if (Object.keys(firebaseConfig).length > 0 && firebaseConfig.apiKey) { 
+                const initializedApp = initializeApp(firebaseConfig); 
+                const authInstance = getAuth(initializedApp);
+                const firestoreInstance = getFirestore(initializedApp);
+                setApp(initializedApp);
+                setAuth(authInstance);
+                setDb(firestoreInstance); 
+                
+                // onAuthStateChanged è l'observer centrale che gestisce lo stato di login
+                const unsubscribe = onAuthStateChanged(authInstance, (currentUser) => {
+                    setUser(currentUser); // Imposta l'utente (o null se logout)
+                    setIsAuthReady(true); // Indica che il controllo auth è terminato
+                });
+                return () => unsubscribe(); // Pulisce l'observer quando il componente si smonta
+            } else { 
+                console.error("Configurazione Firebase non fornita o incompleta."); 
+                setIsAuthReady(true); // Permette di mostrare un errore se la config non c'è
+            } 
+        } catch(e) { 
+            console.error("Errore inizializzazione Firebase:", e); 
+            setIsAuthReady(true); 
+        }
     }, []);
 
     // Carica i dati dell'utente quando questo effettua il login
     useEffect(() => {
         if (!isAuthReady || !db || !user) {
-            // Se l'utente fa logout, pulisci i dati
-            if (!user) {
-                setProjects([]);
-                setTasks([]);
-                setResources([]);
-            }
-            return;
-        };
+            // Se l'utente fa logout, pulisci i dati
+            if (!user) {
+                setProjects([]);
+                setTasks([]);
+                setResources([]);
+            }
+            return;
+        };
 
-        const userId = user.uid;
+        const userId = user.uid;
 
         const unsubProjects = onSnapshot(query(collection(db, `users/${userId}/projects`)), snap => setProjects(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
         const unsubTasks = onSnapshot(query(collection(db, `users/${userId}/tasks`)), snap => setTasks(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
         const unsubResources = onSnapshot(query(collection(db, `users/${userId}/resources`)), snap => setResources(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-        
-        return () => { unsubProjects(); unsubTasks(); unsubResources(); }; // Pulisce gli listeners quando l'utente cambia o fa logout
+        
+        return () => { unsubProjects(); unsubTasks(); unsubResources(); }; // Pulisce gli listeners quando l'utente cambia o fa logout
     }, [isAuthReady, db, user]);
 
     if (!isAuthReady) {
-        return <div className="h-screen w-screen flex justify-center items-center bg-gray-100"><div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500 mr-4"></div><div className="text-xl font-semibold">Caricamento...</div></div>;
-    }
+        return <div className="h-screen w-screen flex justify-center items-center bg-gray-100"><div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500 mr-4"></div><div className="text-xl font-semibold">Caricamento...</div></div>;
+    }
 
-    if (!user) {
-        return (
-            <>
-                <Notification message={notification.message} type={notification.type} onClose={() => setNotification({ message: '' })} />
-                <AuthScreen auth={auth} setNotification={setNotification} />
-            </>
-        );
-    }
+    if (!user) {
+        return (
+            <>
+                <Notification message={notification.message} type={notification.type} onClose={() => setNotification({ message: '' })} />
+                <AuthScreen auth={auth} setNotification={setNotification} />
+            </>
+        );
+    }
     
     return <MainDashboard projects={projects} tasks={tasks} resources={resources} db={db} userId={user.uid} auth={auth} />;
 }
