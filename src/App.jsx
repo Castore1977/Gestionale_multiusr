@@ -102,8 +102,6 @@ const DatePicker = ({ value, onChange, ...props }) => {
 };
 
 // --- COMPONENTI SPECIFICI (Aggiornati per multi-utente) ---
-
-// MODIFICATO: Passa `userId` per creare percorsi corretti in Firestore
 const ResourceManagement = ({ resources, db, userId }) => {
     const [editingResource, setEditingResource] = useState(null);
     const [name, setName] = useState('');
@@ -125,7 +123,6 @@ const ResourceManagement = ({ resources, db, userId }) => {
     return ( <> <Modal isOpen={isConfirmOpen} onClose={() => setIsConfirmOpen(false)} title="Conferma Eliminazione"> <div> <p>Sei sicuro di voler eliminare questa risorsa?</p> <div className="flex justify-end mt-4"> <button onClick={() => setIsConfirmOpen(false)} className="bg-gray-300 text-gray-800 px-4 py-2 rounded-md mr-2">Annulla</button> <button onClick={deleteResource} className="bg-red-600 text-white px-4 py-2 rounded-md">Elimina</button> </div> </div> </Modal> <div> <h4 className="text-lg font-medium text-gray-700 mb-3">{editingResource ? 'Modifica Risorsa' : 'Aggiungi Risorsa'}</h4> <div className="space-y-4 p-4 border rounded-md bg-gray-50 mb-6"> <div className="grid grid-cols-1 md:grid-cols-2 gap-4"> <div> <label className="block text-sm font-medium text-gray-700">Nome Risorsa</label> <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Mario Rossi" className="mt-1 block w-full px-3 py-2 border-gray-300 rounded-md shadow-sm" required/> </div> <div> <label className="block text-sm font-medium text-gray-700">Società</label> <input type="text" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Acme Inc." className="mt-1 block w-full px-3 py-2 border-gray-300 rounded-md shadow-sm" list="companies-datalist" /> <datalist id="companies-datalist">{uniqueCompanies.map(c => <option key={c} value={c} />)}</datalist> </div> <div> <label className="block text-sm font-medium text-gray-700">Email</label> <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="mario.rossi@example.com" className="mt-1 block w-full px-3 py-2 border-gray-300 rounded-md shadow-sm" /> </div> <div> <label className="block text-sm font-medium text-gray-700">Telefono</label> <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+39 333 1234567" className="mt-1 block w-full px-3 py-2 border-gray-300 rounded-md shadow-sm" /> </div> <div> <label className="block text-sm font-medium text-gray-700">Costo Orario (€)</label> <input type="number" value={hourlyCost} onChange={(e) => setHourlyCost(e.target.value)} placeholder="50" className="mt-1 block w-full px-3 py-2 border-gray-300 rounded-md shadow-sm" /> </div> </div> <div> <label className="block text-sm font-medium text-gray-700">Note</label> <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Specializzazione, contatto, etc." rows="2" className="mt-1 block w-full px-3 py-2 border-gray-300 rounded-md shadow-sm"></textarea> </div> <div className="flex justify-end items-center gap-4"> {editingResource && (<button onClick={resetForm} className="text-sm text-gray-600 hover:underline">Annulla modifica</button>)} <button onClick={handleSubmit} className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 flex items-center gap-2"> <Plus size={16} /> {editingResource ? 'Salva Modifiche' : 'Aggiungi Risorsa'} </button> </div> </div> <h4 className="text-lg font-medium text-gray-700 mb-3">Elenco Risorse</h4> <div className="space-y-2 max-h-60 overflow-y-auto"> {resources.map(res => ( <div key={res.id} className="bg-white p-3 rounded-md border flex items-start justify-between"> <div className="flex-grow"> <p className="font-semibold text-gray-900">{res.name} <span className="text-sm font-normal text-gray-600">({formatCurrency(res.hourlyCost || 0)}/h)</span></p> {res.company && <p className="text-sm text-blue-700">{res.company}</p>} {res.email && <p className="text-sm text-gray-600">{res.email}</p>} {res.phone && <p className="text-sm text-gray-600">{res.phone}</p>} {res.notes && <p className="text-xs text-gray-500 mt-1">{res.notes}</p>} </div> <div className="flex-shrink-0 flex gap-2 ml-4"> <button onClick={() => handleEdit(res)} className="text-blue-600 hover:text-blue-800"><Edit size={16} /></button> <button onClick={() => confirmDelete(res.id)} className="text-red-500 hover:text-red-700"><Trash2 size={16} /></button> </div> </div> ))} </div> </div> </> );
 };
 
-// MODIFICATO: Passa `userId`
 const ProjectForm = ({ project, onDone, db, userId }) => {
     const [name, setName] = useState(project ? project.name : '');
     const [color, setColor] = useState(project ? project.color : '#a855f7');
@@ -133,7 +130,6 @@ const ProjectForm = ({ project, onDone, db, userId }) => {
     return ( <form onSubmit={handleSubmit} className="space-y-4"> <div> <label htmlFor="project-name" className="block text-sm font-medium text-gray-700">Nome Progetto</label> <input id="project-name" type="text" value={name} onChange={e => setName(e.target.value)} required className="mt-1 block w-full px-3 py-2 border-gray-300 rounded-md shadow-sm" /> </div> <div> <label htmlFor="project-color" className="block text-sm font-medium text-gray-700">Colore Progetto</label> <input id="project-color" type="color" value={color} onChange={e => setColor(e.target.value)} className="mt-1 w-full h-10 p-1 border border-gray-300 rounded-md"/> </div> <div className="flex justify-end pt-4 gap-2"> <button type="button" onClick={onDone} className="bg-gray-300 text-gray-800 px-4 py-2 rounded-md">Annulla</button> <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-md">{project && project.id ? 'Salva Modifiche' : 'Crea Progetto'}</button> </div> </form> );
 };
 
-// MODIFICATO: Passa `userId`
 const TaskForm = ({ db, projects, task, resources, allTasks, onDone, selectedProjectIdForNew, userId }) => {
     const getProjectColor = useCallback((pId) => projects.find(p => p.id === pId)?.color || '#3b82f6', [projects]);
     const [name, setName] = useState(task ? task.name : '');
@@ -319,10 +315,8 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
     const ganttContainerRef = useRef(null);
     const [tooltip, setTooltip] = useState({ visible: false, content: '', x: 0, y: 0 });
     
-    // --- COSTANTI DI LAYOUT (Invariate) ---
     const ROW_HEIGHT = 64; const DAY_WIDTH = 40; const PROJECT_HEADER_HEIGHT = 64; const SIDEBAR_WIDTH = 384;
 
-    // --- Calcolo date e task (Logica interna invariata) ---
     const { overallStartDate, totalDays } = useMemo(() => { 
         if (tasks.length === 0) return { overallStartDate: new Date(), totalDays: 30 };
         const startDates = tasks.map(t => new Date(t.startDate)).filter(d => !isNaN(d)); 
@@ -419,7 +413,6 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
     const handleOpenNewProjectModal = () => { const existingColors = projects.map(p => p.color); let newColor; do { newColor = `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`; } while (existingColors.includes(newColor)); setEditingProject({ name: '', color: newColor }); setIsProjectModalOpen(true); };
     const confirmDeleteItem = (item, type) => setItemToDelete({item, type});
     
-    // MODIFICATO: Usa percorsi utente-specifici
     const handleDeleteItem = async () => {
         if (!itemToDelete || !userId) return;
         const { item, type } = itemToDelete;
@@ -443,18 +436,15 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
         } finally { setItemToDelete(null); setIsLoading(false); }
     };
     
-    // MODIFICATO: Usa percorsi utente-specifici
     const handleGanttDrop = async (e) => { e.preventDefault(); if (!userId) return; const { taskId, type, initialX, initialStartDate, initialEndDate } = dragInfo.current; if (!taskId) return; const dateOffset = Math.round((e.clientX - initialX) / DAY_WIDTH); let newStartDate, newEndDate; const taskRef = doc(db, `users/${userId}/tasks`, taskId); if (type === 'move') { const duration = calculateDaysDifference(initialStartDate, initialEndDate); newStartDate = new Date(initialStartDate); newStartDate.setDate(newStartDate.getDate() + dateOffset); newEndDate = new Date(newStartDate); newEndDate.setDate(newEndDate.getDate() + duration); } else if (type === 'resize-end') { newStartDate = new Date(initialStartDate); newEndDate = new Date(initialEndDate); newEndDate.setDate(newEndDate.getDate() + dateOffset); if (newEndDate < newStartDate) newEndDate = newStartDate; } else if (type === 'resize-start') { newEndDate = new Date(initialEndDate); newStartDate = new Date(initialStartDate); newStartDate.setDate(newStartDate.getDate() + dateOffset); if (newStartDate > newEndDate) newStartDate = newEndDate; } else { return; } try { await updateDoc(taskRef, { startDate: newStartDate.toISOString().split('T')[0], endDate: newEndDate.toISOString().split('T')[0] }); } catch(error) { console.error("Errore aggiornamento task:", error); } dragInfo.current = {}; };
     const handleDragStart = (e, task, type) => { e.dataTransfer.effectAllowed = 'move'; dragInfo.current = { taskId: task.id, type, initialX: e.clientX, initialStartDate: task.startDate, initialEndDate: task.endDate }; };
 
     const exportData = () => { const dataToExport = { projects, tasks, resources, exportedAt: new Date().toISOString() }; const dataStr = JSON.stringify(dataToExport, null, 2); const blob = new Blob([dataStr], {type: "application/json"}); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `gantt_backup_${new Date().toISOString().split('T')[0]}.json`; document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url); setNotification({message: "Esportazione completata.", type: "success"}); };
     const handleFileImportChange = (e) => { const file = e.target.files[0]; if (file) { setImportFile(file); setIsImportConfirmOpen(true); } e.target.value = null; };
     
-    // MODIFICATO: L'importazione sovrascrive i dati SOLO per l'utente corrente
     const importData = async () => { if (!importFile || !userId) return; setIsLoading(true); setLoadingMessage("Importazione in corso..."); const reader = new FileReader(); reader.onload = async (e) => { try { const data = JSON.parse(e.target.result); if (!data.projects || !data.tasks || !data.resources) { throw new Error("Formato file non valido."); } setLoadingMessage("Cancellazione dati esistenti..."); const collectionsToDelete = ['tasks', 'resources', 'projects']; for (const coll of collectionsToDelete) { const userCollRef = collection(db, `users/${userId}/${coll}`); const snapshot = await getDocs(userCollRef); const batch = writeBatch(db); snapshot.docs.forEach(d => batch.delete(d.ref)); await batch.commit(); } setLoadingMessage("Importazione nuovi dati..."); const importBatch = writeBatch(db); data.projects.forEach(p => importBatch.set(doc(collection(db, `users/${userId}/projects`)), p)); data.tasks.forEach(t => importBatch.set(doc(collection(db, `users/${userId}/tasks`)), t)); data.resources.forEach(r => importBatch.set(doc(collection(db, `users/${userId}/resources`)), r)); await importBatch.commit(); setNotification({message: "Importazione completata!", type: "success"}); } catch (error) { console.error("Errore importazione:", error); setNotification({message: `Errore importazione: ${error.message}`, type: "error"}); } finally { setIsLoading(false); setImportFile(null); setIsImportConfirmOpen(false); } }; reader.readAsText(importFile); };
     
-    {/********* INIZIO CODICE MODIFICATO *********/}
-    const exportToPDF = (reportType) => {
+    const exportToPDF = (reportType) => {
         const { jsPDF } = window.jspdf;
         if (typeof jsPDF === 'undefined' || (reportType === 'gantt' && typeof window.html2canvas === 'undefined')) {
             setNotification({ message: "Libreria PDF non caricata. Riprova.", type: "error" });
@@ -462,10 +452,12 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
         }
 
         setIsLoading(true);
-        setLoadingMessage(`Esportazione ${reportType}...`);
+        setLoadingMessage(`Generazione anteprima ${reportType}...`);
 
-        const rgbToHex = (col) => {
-            if (!col || !col.startsWith('rgb')) return '#FFFFFF';
+        // Funzione helper per convertire i colori in esadecimale, gestendo anche il trasparente.
+        const convertToHex = (col) => {
+            if (col.startsWith('#')) return col;
+            if (!col || !col.startsWith('rgb') || col === 'rgba(0, 0, 0, 0)') return '#FFFFFF'; // Converte trasparente in bianco
             try {
                 const rgb = col.replace(/[^\d,]/g, '').split(',');
                 const r = parseInt(rgb[0], 10).toString(16).padStart(2, '0');
@@ -473,7 +465,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
                 const b = parseInt(rgb[2], 10).toString(16).padStart(2, '0');
                 return `#${r}${g}${b}`;
             } catch (e) {
-                return '#FFFFFF'; // Fallback color
+                return '#FFFFFF';
             }
         };
 
@@ -482,8 +474,15 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
                 const raw = data.cell.raw;
                 if (raw && (raw.nodeName === 'TD' || raw.nodeName === 'TH')) {
                     const computedStyle = window.getComputedStyle(raw);
-                    data.cell.styles.fillColor = computedStyle.backgroundColor;
-                    const hexColor = rgbToHex(computedStyle.backgroundColor);
+                    let bgColor = computedStyle.backgroundColor;
+
+                    // Se il colore è trasparente, la libreria PDF genera un errore. Lo impostiamo su bianco.
+                    if (bgColor === 'rgba(0, 0, 0, 0)') {
+                        bgColor = '#FFFFFF';
+                    }
+
+                    data.cell.styles.fillColor = bgColor;
+                    const hexColor = convertToHex(bgColor);
                     const fontColor = getContrastingTextColor(hexColor);
                     data.cell.styles.textColor = fontColor === 'text-black' ? '#000000' : '#FFFFFF';
                     data.cell.styles.halign = raw.style.textAlign || 'left';
@@ -491,19 +490,16 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
             }
         };
 
-        const timestamp = new Date().toLocaleString('sv-SE').replace(/ /g, '_').replace(/:/g, '-');
-
+        // L'esportazione Gantt è asincrona e gestisce il caricamento in modo separato.
         if (reportType === 'gantt') {
             const ganttElement = ganttContainerRef.current;
             window.html2canvas(ganttElement, { useCORS: true, scale: 1.5, width: ganttElement.scrollWidth, height: ganttElement.scrollHeight, windowWidth: ganttElement.scrollWidth, windowHeight: ganttElement.scrollHeight })
             .then(canvas => {
                 const imgData = canvas.toDataURL('image/png');
                 const doc = new jsPDF('l', 'mm', 'a4');
-                const imgWidth = 280;
-                const pageHeight = 190;
+                const imgWidth = 280; const pageHeight = 190;
                 const imgHeight = canvas.height * imgWidth / canvas.width;
-                let heightLeft = imgHeight;
-                let position = 10;
+                let heightLeft = imgHeight; let position = 10;
                 doc.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
                 heightLeft -= pageHeight;
                 while (heightLeft > 0) {
@@ -512,7 +508,8 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
                     doc.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
                     heightLeft -= pageHeight;
                 }
-                doc.save(`gantt_chart_${timestamp}.pdf`);
+                // Apre l'anteprima in una nuova scheda
+                doc.output('dataurlnewwindow');
             })
             .catch((err) => {
                  console.error("Gantt export error:", err);
@@ -523,7 +520,8 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
             });
             return;
         }
-        
+
+        // Gestisce i report tabellari
         const doc = new jsPDF();
         try {
             if (reportType === 'cost' || reportType === 'activity') {
@@ -543,42 +541,28 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
                     const h3 = div.querySelector('h3');
                     const p = div.querySelector('p');
                     const table = div.querySelector('table');
-                    
-                    if (startY > 250) { 
+                    if (startY > 250) { // Controllo per il cambio pagina
                        doc.addPage();
                        startY = 15;
                     }
-                    
-                    if (h3) {
-                        doc.setFontSize(12).setFont(undefined, 'bold');
-                        doc.text(h3.innerText, 14, startY);
-                        startY += 6;
-                    }
-                    if (p) {
-                        doc.setFontSize(10).setFont(undefined, 'normal');
-                        doc.text(p.innerText, 14, startY);
-                        startY += 4;
-                    }
+                    if (h3) { doc.setFontSize(12).setFont(undefined, 'bold'); doc.text(h3.innerText, 14, startY); startY += 6; }
+                    if (p) { doc.setFontSize(10).setFont(undefined, 'normal'); doc.text(p.innerText, 14, startY); startY += 4; }
                     if (table) {
-                        doc.autoTable({
-                            html: table,
-                            startY: startY,
-                            ...commonAutoTableOptions
-                        });
+                        doc.autoTable({ html: table, startY: startY, ...commonAutoTableOptions });
                         startY = doc.autoTable.previous.finalY + 10;
                     }
                 });
             }
-            doc.save(`report_${reportType}_${timestamp}.pdf`);
+            // Apre l'anteprima in una nuova scheda
+            doc.output('dataurlnewwindow');
         } catch (e) {
             console.error("PDF export error:", e);
-            setNotification({ message: "Errore durante la creazione del PDF.", type: 'error' });
+            setNotification({ message: `Errore durante la creazione del PDF: ${e.message}`, type: 'error' });
         } finally {
             setIsLoading(false);
         }
     };
-    {/********* FINE CODICE MODIFICATO *********/}
-
+    
     const handleShowTooltip = (e, content) => { if (!content || content.trim() === '') return; setTooltip({ visible: true, content, x: e.clientX + 10, y: e.clientY + 10 }); };
     const handleMoveTooltip = (e) => { if (tooltip.visible) { setTooltip(prev => ({ ...prev, x: e.clientX + 10, y: e.clientY + 10 })); }};
     const handleHideTooltip = () => { setTooltip(prev => ({ ...prev, visible: false })); };
@@ -686,7 +670,6 @@ const AuthScreen = ({ auth, setNotification }) => {
             } else {
                 await createUserWithEmailAndPassword(auth, email, password);
             }
-            // Non serve più fare nulla qui, l'observer onAuthStateChanged farà il resto
         } catch (error) {
             console.error(`Errore durante ${isLogin ? 'il login' : 'la registrazione'}:`, error);
             setNotification({ message: error.message, type: 'error' });
@@ -738,7 +721,6 @@ export default function App() {
     const [tasks, setTasks] = useState([]);
     const [resources, setResources] = useState([]);
     
-    // Inizializzazione di Firebase e librerie esterne
     useEffect(() => {
         const scripts = [ { id: 'jspdf', src: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js' }, { id: 'jspdf-autotable', src: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js' }, { id: 'html2canvas', src: 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js' } ];
         scripts.forEach(scriptInfo => { if (!document.getElementById(scriptInfo.id)) { const script = document.createElement('script'); script.id = scriptInfo.id; script.src = scriptInfo.src; script.async = false; document.head.appendChild(script); } });
@@ -752,15 +734,14 @@ export default function App() {
                 setAuth(authInstance);
                 setDb(firestoreInstance); 
                 
-                // onAuthStateChanged è l'observer centrale che gestisce lo stato di login
                 const unsubscribe = onAuthStateChanged(authInstance, (currentUser) => {
-                    setUser(currentUser); // Imposta l'utente (o null se logout)
-                    setIsAuthReady(true); // Indica che il controllo auth è terminato
+                    setUser(currentUser);
+                    setIsAuthReady(true);
                 });
-                return () => unsubscribe(); // Pulisce l'observer quando il componente si smonta
+                return () => unsubscribe();
             } else { 
                 console.error("Configurazione Firebase non fornita o incompleta."); 
-                setIsAuthReady(true); // Permette di mostrare un errore se la config non c'è
+                setIsAuthReady(true);
             } 
         } catch(e) { 
             console.error("Errore inizializzazione Firebase:", e); 
@@ -768,10 +749,8 @@ export default function App() {
         }
     }, []);
 
-    // Carica i dati dell'utente quando questo effettua il login
     useEffect(() => {
         if (!isAuthReady || !db || !user) {
-            // Se l'utente fa logout, pulisci i dati
             if (!user) {
                 setProjects([]);
                 setTasks([]);
@@ -786,7 +765,7 @@ export default function App() {
         const unsubTasks = onSnapshot(query(collection(db, `users/${userId}/tasks`)), snap => setTasks(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
         const unsubResources = onSnapshot(query(collection(db, `users/${userId}/resources`)), snap => setResources(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
         
-        return () => { unsubProjects(); unsubTasks(); unsubResources(); }; // Pulisce gli listeners quando l'utente cambia o fa logout
+        return () => { unsubProjects(); unsubTasks(); unsubResources(); };
     }, [isAuthReady, db, user]);
 
     if (!isAuthReady) {
