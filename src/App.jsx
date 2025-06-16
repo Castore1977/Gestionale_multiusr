@@ -101,7 +101,7 @@ const DatePicker = ({ value, onChange, ...props }) => {
  return ( <input type="date" value={formatDate(value)} onChange={(e) => onChange(e.target.value)} className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm" {...props} /> );
 };
 
-// --- COMPONENTI SPECIFICI (Aggiornati per multi-utente) ---
+// --- COMPONENTI SPECIFICI ---
 const ResourceManagement = ({ resources, db, userId }) => {
     const [editingResource, setEditingResource] = useState(null);
     const [name, setName] = useState('');
@@ -152,15 +152,33 @@ const TaskForm = ({ db, projects, task, resources, allTasks, onDone, selectedPro
     const handleDurationChange = (value) => { const newDur = parseInt(value, 10); if (newDur > 0) { setDuration(newDur); const newEndDate = new Date(startDate); newEndDate.setDate(newEndDate.getDate() + newDur - 1); setEndDate(newEndDate.toISOString().split('T')[0]); } };
     const handleEndDateChange = (date) => { setEndDate(date); const newDuration = calculateDaysDifference(startDate, date) + 1; if (newDuration > 0) { setDuration(newDuration); } };
     
+    // Applica il vincolo Finish-to-Finish anche durante la modifica nel form
     useEffect(() => {
-        if (dependencies?.length > 0) {
-            const latestPredecessorEndDate = dependencies.reduce((latest, depId) => { const predecessor = allTasks.find(t => t.id === depId); if (!predecessor) return latest; const predecessorEndDate = new Date(predecessor.endDate); return predecessorEndDate > latest ? predecessorEndDate : latest; }, new Date(0));
-            if (latestPredecessorEndDate > new Date(0)) {
-                const newStartDate = new Date(latestPredecessorEndDate); newStartDate.setDate(newStartDate.getDate() + 1);
-                if (newStartDate > new Date(startDate)) { handleStartDateChange(newStartDate.toISOString().split('T')[0]); }
+        if (dependencies?.length > 0 && allTasks.length > 0) {
+            // Trova la data di fine più recente tra tutti i predecessori
+            const maxPredecessorEndDate = dependencies.reduce((latest, depId) => {
+                const predecessor = allTasks.find(t => t.id === depId);
+                if (!predecessor || !predecessor.endDate) return latest;
+                const predecessorEndDate = new Date(predecessor.endDate);
+                return predecessorEndDate > latest ? predecessorEndDate : latest;
+            }, new Date(0));
+
+            // Se esiste una data di fine valida per un predecessore
+            if (maxPredecessorEndDate > new Date(0)) {
+                const currentEndDate = new Date(endDate);
+                // Se la data di fine corrente viola il vincolo, aggiustala
+                if (currentEndDate < maxPredecessorEndDate) {
+                    const newEndDate = new Date(maxPredecessorEndDate);
+                    const newStartDate = new Date(newEndDate);
+                    // Sposta indietro la data di inizio per mantenere la durata
+                    newStartDate.setDate(newEndDate.getDate() - (duration - 1));
+
+                    setEndDate(newEndDate.toISOString().split('T')[0]);
+                    setStartDate(newStartDate.toISOString().split('T')[0]);
+                }
             }
         }
-    }, [dependencies, allTasks, startDate]);
+    }, [dependencies, allTasks, endDate, duration]); // Ricalcola quando cambiano le dipendenze, la data di fine o la durata
 
     const handleSubmit = async (e) => { e.preventDefault(); if (!userId) return; const taskData = { name, startDate, endDate, completionPercentage: Number(completionPercentage), dailyHours: Number(dailyHours), taskColor, assignedResources, dependencies, projectId, notes }; try { if (task) { await updateDoc(doc(db, `users/${userId}/tasks`, task.id), taskData); } else { await addDoc(collection(db, `users/${userId}/tasks`), { ...taskData, order: allTasks.filter(t => t.projectId === projectId).length }); } onDone(); } catch (error) { console.error("Errore salvataggio task:", error); } };
     const handleResourceToggle = (resourceId) => setAssignedResources(prev => prev.includes(resourceId) ? prev.filter(id => id !== resourceId) : [...prev, resourceId]);
@@ -183,7 +201,7 @@ const TaskForm = ({ db, projects, task, resources, allTasks, onDone, selectedPro
     );
 };
 
-// --- VISTE REPORT (Logica interna invariata) ---
+// --- VISTE REPORT ---
 const ActivityReportView = ({ projectsWithData, onExportPDF }) => {
     const reportData = useMemo(() => {
         if (!projectsWithData) return { overdueTasks: [], dueTodayTasks: [], dueInThreeDaysTasks: [], otherTasks: [] };
@@ -308,7 +326,7 @@ const CostReportView = ({ projectsWithData, onExportPDF }) => {
     );
 };
 
-// --- VISTA MASTER (Aggiornata per multi-utente) ---
+// --- VISTA MASTER ---
 const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
     const [view, setView] = useState('gantt'); const [isLoading, setIsLoading] = useState(false); const [loadingMessage, setLoadingMessage] = useState(''); const [notification, setNotification] = useState({ message: '', type: 'info' }); const [isTaskModalOpen, setIsTaskModalOpen] = useState(false); const [isResourceModalOpen, setIsResourceModalOpen] = useState(false); const [isProjectModalOpen, setIsProjectModalOpen] = useState(false); const [editingTask, setEditingTask] = useState(null); const [editingProject, setEditingProject] = useState(null); const [isImportConfirmOpen, setIsImportConfirmOpen] = useState(false); const [importFile, setImportFile] = useState(null); const [selectedProjectId, setSelectedProjectId] = useState(null); const dragInfo = useRef({}); const fileInputRef = useRef(null);
     const [itemToDelete, setItemToDelete] = useState(null);
@@ -336,18 +354,37 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
         
         const taskMap = {};
         tasks.forEach(task => { const startDate = new Date(task.startDate); const endDate = new Date(task.endDate); const duration = calculateDaysDifference(startDate, endDate) + 1; taskMap[task.id] = { ...task, startDate, endDate, duration: duration > 0 ? duration : 1 }; });
-        for (let i = 0; i < tasks.length * 2; i++) {
-             tasks.forEach(task => {
-                 if (task.dependencies && task.dependencies.length > 0) {
-                     let maxPredecessorEndDate = new Date(0);
-                     task.dependencies.forEach(depId => { const predecessor = taskMap[depId]; if (predecessor && predecessor.endDate > maxPredecessorEndDate) maxPredecessorEndDate = predecessor.endDate; });
-                     if (maxPredecessorEndDate > new Date(0)) {
-                         const newStartDate = new Date(maxPredecessorEndDate); newStartDate.setDate(newStartDate.getDate() + 1);
-                         if (newStartDate > taskMap[task.id].startDate) { const currentDuration = taskMap[task.id].duration; taskMap[task.id].startDate = newStartDate; const newEndDate = new Date(newStartDate); newEndDate.setDate(newEndDate.getDate() + currentDuration - 1); taskMap[task.id].endDate = newEndDate; }
-                     }
-                 }
-             });
+
+        // Applica i vincoli di dipendenza (Finish-to-Finish)
+        for (let i = 0; i < tasks.length * 2; i++) { // Itera più volte per risolvere le dipendenze a catena
+            tasks.forEach(task => {
+                if (task.dependencies && task.dependencies.length > 0) {
+                    let maxPredecessorEndDate = new Date(0);
+                    task.dependencies.forEach(depId => {
+                        const predecessor = taskMap[depId];
+                        if (predecessor && predecessor.endDate > maxPredecessorEndDate) {
+                            maxPredecessorEndDate = predecessor.endDate;
+                        }
+                    });
+
+                    if (maxPredecessorEndDate > new Date(0)) {
+                        const successorTask = taskMap[task.id];
+                        // Vincolo Finish-to-Finish: la fine del successore non può precedere la fine del predecessore.
+                        if (successorTask.endDate < maxPredecessorEndDate) {
+                            // Se il vincolo è violato, sposta l'attività mantenendo la sua durata.
+                            const duration = successorTask.duration;
+                            const newEndDate = new Date(maxPredecessorEndDate);
+                            const newStartDate = new Date(newEndDate);
+                            newStartDate.setDate(newEndDate.getDate() - duration + 1);
+                            // Aggiorna le date nel nostro taskMap locale
+                            taskMap[task.id].startDate = newStartDate;
+                            taskMap[task.id].endDate = newEndDate;
+                        }
+                    }
+                }
+            });
         }
+
         const processedTasks = Object.values(taskMap);
         const positions = new Map();
         let currentY = 0;
@@ -454,10 +491,9 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
         setIsLoading(true);
         setLoadingMessage(`Generazione anteprima ${reportType}...`);
 
-        // Funzione helper per convertire i colori in esadecimale, gestendo anche il trasparente.
         const convertToHex = (col) => {
             if (col.startsWith('#')) return col;
-            if (!col || !col.startsWith('rgb') || col === 'rgba(0, 0, 0, 0)') return '#FFFFFF'; // Converte trasparente in bianco
+            if (!col || !col.startsWith('rgb') || col === 'rgba(0, 0, 0, 0)') return '#FFFFFF';
             try {
                 const rgb = col.replace(/[^\d,]/g, '').split(',');
                 const r = parseInt(rgb[0], 10).toString(16).padStart(2, '0');
@@ -475,12 +511,9 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
                 if (raw && (raw.nodeName === 'TD' || raw.nodeName === 'TH')) {
                     const computedStyle = window.getComputedStyle(raw);
                     let bgColor = computedStyle.backgroundColor;
-
-                    // Se il colore è trasparente, la libreria PDF genera un errore. Lo impostiamo su bianco.
                     if (bgColor === 'rgba(0, 0, 0, 0)') {
                         bgColor = '#FFFFFF';
                     }
-
                     data.cell.styles.fillColor = bgColor;
                     const hexColor = convertToHex(bgColor);
                     const fontColor = getContrastingTextColor(hexColor);
@@ -490,7 +523,6 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
             }
         };
 
-        // L'esportazione Gantt è asincrona e gestisce il caricamento in modo separato.
         if (reportType === 'gantt') {
             const ganttElement = ganttContainerRef.current;
             window.html2canvas(ganttElement, { useCORS: true, scale: 1.5, width: ganttElement.scrollWidth, height: ganttElement.scrollHeight, windowWidth: ganttElement.scrollWidth, windowHeight: ganttElement.scrollHeight })
@@ -508,7 +540,6 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
                     doc.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
                     heightLeft -= pageHeight;
                 }
-                // Apre l'anteprima in una nuova scheda
                 doc.output('dataurlnewwindow');
             })
             .catch((err) => {
@@ -521,7 +552,6 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
             return;
         }
 
-        // Gestisce i report tabellari
         const doc = new jsPDF();
         try {
             if (reportType === 'cost' || reportType === 'activity') {
@@ -541,7 +571,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
                     const h3 = div.querySelector('h3');
                     const p = div.querySelector('p');
                     const table = div.querySelector('table');
-                    if (startY > 250) { // Controllo per il cambio pagina
+                    if (startY > 250) {
                        doc.addPage();
                        startY = 15;
                     }
@@ -553,7 +583,6 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
                     }
                 });
             }
-            // Apre l'anteprima in una nuova scheda
             doc.output('dataurlnewwindow');
         } catch (e) {
             console.error("PDF export error:", e);
@@ -650,7 +679,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
     );
 };
 
-// --- NUOVO COMPONENTE: Schermata di Autenticazione ---
+// --- COMPONENTE DI AUTENTICAZIONE ---
 const AuthScreen = ({ auth, setNotification }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -709,7 +738,7 @@ const AuthScreen = ({ auth, setNotification }) => {
 };
 
 
-// --- COMPONENTE RADICE (Aggiornato per gestire l'autenticazione) ---
+// --- COMPONENTE RADICE ---
 export default function App() {
     const [app, setApp] = useState(null);
     const [auth, setAuth] = useState(null);
