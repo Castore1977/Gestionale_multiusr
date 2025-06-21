@@ -4,7 +4,6 @@ import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWith
 import { getFirestore, collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, setDoc, query, where, writeBatch, getDocs } from 'firebase/firestore';
 import { ArrowRight, Plus, Users, Trash2, Edit, LayoutDashboard, BarChart3, X, AlertTriangle, FileDown, FileUp, CheckCircle, ClipboardList, StickyNote, LogOut } from 'lucide-react';
 
-
 // --- CONFIGURAZIONE FIREBASE ---
 const firebaseConfigString = import.meta.env.VITE_FIREBASE_CONFIG;
 const firebaseConfig = firebaseConfigString ? JSON.parse(firebaseConfigString) : {
@@ -232,6 +231,7 @@ const TaskForm = ({ db, projects, task, resources, allTasks, onDone, selectedPro
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!userId) return;
+
         const taskData = {
             name,
             startDate,
@@ -244,18 +244,29 @@ const TaskForm = ({ db, projects, task, resources, allTasks, onDone, selectedPro
             projectId,
             notes,
             isRescheduled,
-            rescheduledEndDate: isRescheduled ? rescheduledEndDate : ''
+            rescheduledEndDate: isRescheduled ? rescheduledEndDate : '',
         };
+
         try {
-            if (task) {
-                // Durante l'aggiornamento, non modifichiamo le date originali
-                await updateDoc(doc(db, `users/${userId}/tasks`, task.id), taskData);
-            } else {
-                // Durante la creazione, impostiamo le date originali per la prima volta
+            if (task) { // UPDATE
+                const taskRef = doc(db, `users/${userId}/tasks`, task.id);
+                const updatePayload = { ...taskData };
+
+                // Se l'attività non ha ancora date originali (cioè è un'attività "vecchia"),
+                // le impostiamo ora usando i valori che l'attività aveva quando il modulo è stato aperto.
+                // Questo crea una "istantanea" permanente della pianificazione originale.
+                if (!task.originalStartDate && !task.originalEndDate) {
+                    updatePayload.originalStartDate = task.startDate;
+                    updatePayload.originalEndDate = task.endDate;
+                }
+                
+                await updateDoc(taskRef, updatePayload);
+
+            } else { // CREATE
                 await addDoc(collection(db, `users/${userId}/tasks`), {
                     ...taskData,
-                    originalStartDate: startDate, // Salva la data di inizio originale
-                    originalEndDate: endDate,     // Salva la data di fine originale
+                    originalStartDate: startDate,
+                    originalEndDate: endDate,
                     order: allTasks.filter(t => t.projectId === projectId).length
                 });
             }
