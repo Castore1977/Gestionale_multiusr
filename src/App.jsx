@@ -6,7 +6,6 @@ import { ArrowRight, Plus, Users, Trash2, Edit, LayoutDashboard, BarChart3, X, A
 
 
 
-
 // --- CONFIGURAZIONE FIREBASE ---
 const firebaseConfigString = import.meta.env.VITE_FIREBASE_CONFIG;
 const firebaseConfig = firebaseConfigString ? JSON.parse(firebaseConfigString) : {
@@ -450,10 +449,14 @@ const CostReportView = ({ projectsWithData, onExportPDF }) => {
                                         <div className="flex justify-between items-center">
                                             <span>{project.name}</span>
                                             <div className="text-right">
-                                                <span>Compl: {project.projectCompletionPercentage?.toFixed(1) || '0.0'}%</span>
+                                                <span className="font-normal">Compl: {project.projectCompletionPercentage?.toFixed(1) || '0.0'}%</span>
                                                 {project.budget > 0 && (
-                                                    <div className={`text-xs ${project.budgetSpentPercentage > 100 ? 'font-bold text-red-500' : ''}`} style={{color: project.budgetSpentPercentage > 100 ? '#f87171' : projectTextColor}}>
-                                                        Budget: {project.budgetSpentPercentage.toFixed(1)}%
+                                                    <div className="mt-1 text-xs">
+                                                        <span className="font-normal">Budget: {formatCurrency(project.budget)}</span>
+                                                        <br/>
+                                                        <span className={`${project.budgetUsagePercentage > 100 ? 'font-extrabold' : 'font-normal'}`} style={{color: project.budgetUsagePercentage > 100 ? '#dc2626' : projectTextColor }}>
+                                                           Utilizzo: {project.budgetUsagePercentage.toFixed(1)}%
+                                                        </span>
                                                     </div>
                                                 )}
                                             </div>
@@ -611,10 +614,10 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
             const projectCompletionPercentage = totalDuration > 0 ? weightedCompletion / totalDuration : 0;
             const budget = p.budget || 0;
             const extraCosts = p.extraCosts || 0;
-            const totalSpentWithExtra = projectSpentCost + extraCosts;
-            const budgetSpentPercentage = budget > 0 ? (totalSpentWithExtra / budget) * 100 : 0;
+            const totalEstimatedCostWithExtras = projectTotalCost + extraCosts;
+            const budgetUsagePercentage = budget > 0 ? (totalEstimatedCostWithExtras / budget) * 100 : 0;
 
-            return { ...p, tasks: enrichedTasks, projectCompletionPercentage, projectTotalCost, projectSpentCost, budget, extraCosts, budgetSpentPercentage, projectTop };
+            return { ...p, tasks: enrichedTasks, projectCompletionPercentage, projectTotalCost, projectSpentCost, budget, extraCosts, budgetUsagePercentage, projectTop };
         }); 
         return { projectsWithData: pWithData, taskPositions: positions, ganttHeight: currentY };
     }, [tasks, projects, resources, dateHeaders, DAY_WIDTH, ROW_HEIGHT, PROJECT_HEADER_HEIGHT]);
@@ -709,17 +712,11 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
                         bgColor = '#FFFFFF';
                     }
                     data.cell.styles.fillColor = bgColor;
+                    
                     const hexColor = convertToHex(bgColor);
-                    const fontColor = getContrastingTextColor(hexColor);
+                    const contrastingColor = getContrastingTextColor(hexColor);
                     
-                    // Special handling for budget percentage
-                    const budgetSpan = raw.querySelector('.budget-percentage-pdf');
-                    if (budgetSpan && budgetSpan.classList.contains('over-budget')) {
-                        data.cell.styles.textColor = '#d32f2f'; // Red color for over-budget text
-                    } else {
-                        data.cell.styles.textColor = fontColor === 'text-black' ? '#000000' : '#FFFFFF';
-                    }
-                    
+                    data.cell.styles.textColor = computedStyle.color || contrastingColor;
                     data.cell.styles.halign = raw.style.textAlign || 'left';
                 }
             }
@@ -829,7 +826,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
                                 {projectsWithData.map(project => (
                                     <div key={project.id} className="group/project">
                                         <div onClick={() => setSelectedProjectId(project.id)} className={`flex items-center justify-between p-2 px-4 cursor-pointer transition-all border-b border-r ${selectedProjectId === project.id ? 'bg-blue-200 border-l-4 border-blue-600' : 'bg-white'}`} style={{height: `${PROJECT_HEADER_HEIGHT}px`}}>
-                                            <div className="flex items-center gap-3 flex-grow overflow-hidden"><span className="w-4 h-4 rounded-full flex-shrink-0" style={{backgroundColor: project.color}}></span> <div className="flex-grow overflow-hidden"><h3 className="font-bold text-gray-800 truncate">{project.name}</h3> <div className="w-full bg-gray-300 rounded-full h-1.5 mt-1"><div className="bg-green-500 h-1.5 rounded-full" style={{width: `${project.projectCompletionPercentage.toFixed(0)}%`}}></div></div><span className="text-xs text-gray-500">Compl: {project.projectCompletionPercentage.toFixed(1)}%</span> {project.budget > 0 && (<span className={`text-xs ml-2 ${project.budgetSpentPercentage > 100 ? 'text-red-600 font-bold' : 'text-gray-500'}`}>Budget: {project.budgetSpentPercentage.toFixed(1)}%</span>)}</div></div><div className="flex items-center gap-2 flex-shrink-0 opacity-0 group-hover/project:opacity-100 transition-opacity"><button onClick={(e) => {e.stopPropagation(); handleEditProject(project)}} className="p-1 text-gray-500 hover:text-blue-600"><Edit size={16}/></button><button onClick={(e) => {e.stopPropagation(); confirmDeleteItem(project, 'project')}} className="p-1 text-gray-500 hover:text-red-600"><Trash2 size={16}/></button></div>
+                                            <div className="flex items-center gap-3 flex-grow overflow-hidden"><span className="w-4 h-4 rounded-full flex-shrink-0" style={{backgroundColor: project.color}}></span> <div className="flex-grow overflow-hidden"><h3 className="font-bold text-gray-800 truncate">{project.name}</h3> <div className="w-full bg-gray-300 rounded-full h-1.5 mt-1"><div className="bg-green-500 h-1.5 rounded-full" style={{width: `${project.projectCompletionPercentage.toFixed(0)}%`}}></div></div><span className="text-xs text-gray-500">Compl: {project.projectCompletionPercentage.toFixed(1)}%</span> {project.budget > 0 && (<span className={`text-xs ml-2 ${project.budgetUsagePercentage > 100 ? 'text-red-600 font-bold' : 'text-gray-500'}`}>Budget: {project.budgetUsagePercentage.toFixed(1)}%</span>)}</div></div><div className="flex items-center gap-2 flex-shrink-0 opacity-0 group-hover/project:opacity-100 transition-opacity"><button onClick={(e) => {e.stopPropagation(); handleEditProject(project)}} className="p-1 text-gray-500 hover:text-blue-600"><Edit size={16}/></button><button onClick={(e) => {e.stopPropagation(); confirmDeleteItem(project, 'project')}} className="p-1 text-gray-500 hover:text-red-600"><Trash2 size={16}/></button></div>
                                         </div>
                                         {project.tasks.map(task => (
                                             <div key={task.id} className="flex items-center group/task p-2 pl-9 border-b border-r bg-gray-50" style={{height: `${ROW_HEIGHT}px`}} onDoubleClick={() => handleEditTask(task)}>
@@ -1032,5 +1029,3 @@ export default function App() {
     
     return <MainDashboard projects={projects} tasks={tasks} resources={resources} db={db} userId={user.uid} auth={auth} />;
 }
-
-
