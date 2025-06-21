@@ -4,6 +4,7 @@ import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWith
 import { getFirestore, collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, setDoc, query, where, writeBatch, getDocs } from 'firebase/firestore';
 import { ArrowRight, Plus, Users, Trash2, Edit, LayoutDashboard, BarChart3, X, AlertTriangle, FileDown, FileUp, CheckCircle, ClipboardList, StickyNote, LogOut } from 'lucide-react';
 
+
 // --- CONFIGURAZIONE FIREBASE ---
 const firebaseConfigString = import.meta.env.VITE_FIREBASE_CONFIG;
 const firebaseConfig = firebaseConfigString ? JSON.parse(firebaseConfigString) : {
@@ -621,19 +622,22 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
                 projectTotalHours += totalTaskHours;
                 projectWorkedHours += workedHours;
 
-                const originalTaskData = tasks.find(t => t.id === task.id) || {};
-                const originalStartDateForCalc = new Date(task.originalStartDate || originalTaskData.startDate);
-                const originalEndDateForCalc = new Date(task.originalEndDate || originalTaskData.endDate);
-                const originalDuration = calculateDaysDifference(originalStartDateForCalc, originalEndDateForCalc) + 1;
-                
-                positions.set(task.id, {
+                const pos = {
                     top: currentY,
                     left: calculateDaysDifference(dateHeaders[0], task.startDate) * DAY_WIDTH,
                     width: (duration > 0 ? duration : 1) * DAY_WIDTH,
-                    isRescheduled: task.isRescheduled,
-                    originalLeft: calculateDaysDifference(dateHeaders[0], originalStartDateForCalc) * DAY_WIDTH,
-                    originalWidth: (originalDuration > 0 ? originalDuration : 1) * DAY_WIDTH
-                });
+                };
+                
+                if (task.isRescheduled && task.originalStartDate && task.originalEndDate) {
+                    const originalStartDateForCalc = new Date(task.originalStartDate);
+                    const originalEndDateForCalc = new Date(task.originalEndDate);
+                    const originalDuration = calculateDaysDifference(originalStartDateForCalc, originalEndDateForCalc) + 1;
+                    
+                    pos.originalLeft = calculateDaysDifference(dateHeaders[0], originalStartDateForCalc) * DAY_WIDTH;
+                    pos.originalWidth = (originalDuration > 0 ? originalDuration : 1) * DAY_WIDTH;
+                }
+
+                positions.set(task.id, pos);
                 
                 currentY += ROW_HEIGHT;
                 return {...task, assigned, totalTaskHours, workedHours, totalEstimatedCost, spentCost };
@@ -873,14 +877,18 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
                                 <div className="sticky top-0 z-10 flex h-12 bg-white border-b">{dateHeaders.map((date) => { const isToday = date.toDateString() === today.toDateString(); return (<div key={date.toISOString()} className={`w-10 text-center border-r flex-shrink-0 flex flex-col justify-center ${isToday ? 'bg-red-200' : 'bg-gray-50'}`}><div className={`text-xs ${date.getDay() === 0 || date.getDay() === 6 ? 'text-red-500' : 'text-gray-500'}`}>{['D', 'L', 'M', 'M', 'G', 'V', 'S'][date.getDay()]}</div><div className={`text-sm font-semibold ${isToday ? 'text-red-600' : 'text-gray-800'}`}>{date.getDate()}</div></div>)})}</div>
                                 <div className="relative" style={{height: `${ganttHeight}px`}}>
                                     <div className="absolute top-0 left-0 h-full w-0.5 bg-red-500 opacity-75 z-20" style={{ transform: `translateX(${todayMarkerPosition}px)`}}></div>
-                                    {projectsWithData.map(project => project.tasks.map(task => { const pos = taskPositions.get(task.id); if(!pos) return null; return (
+                                    {projectsWithData.map(project => project.tasks.map(task => { 
+                                        const pos = taskPositions.get(task.id); 
+                                        if(!pos) return null; 
+                                        
+                                        const showPlaceholder = typeof pos.originalLeft === 'number' && (pos.originalLeft !== pos.left || pos.originalWidth !== pos.width);
+
+                                        return (
                                         <div key={task.id} className="absolute" style={{ top: `${pos.top}px`, height: `${ROW_HEIGHT}px`, left: '0px', width: '100%', pointerEvents: 'none' }}>
-                                            {/* --- MODIFICA VISIVA PER RIPIANIFICAZIONE --- */}
-                                            {/* Mostra un segnaposto per la durata e posizione originali */}
-                                            {pos.isRescheduled && (
+                                            {showPlaceholder && (
                                                 <div
-                                                    title="Posizione e durata originali"
-                                                    className="absolute h-8 rounded-md bg-gray-200 border border-dashed border-gray-400 opacity-80"
+                                                    title={`Pianificazione originale: ${new Date(task.originalStartDate).toLocaleDateString()} - ${new Date(task.originalEndDate).toLocaleDateString()}`}
+                                                    className="absolute h-8 rounded-md bg-gray-300 border border-dashed border-gray-500 opacity-80"
                                                     style={{
                                                         top: '16px', 
                                                         left: `${pos.originalLeft}px`,
@@ -889,7 +897,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
                                                 />
                                             )}
                                             <div className="absolute flex items-center" style={{ top: `0px`, height: `${ROW_HEIGHT}px`, left: `${pos.left}px`, width: `${pos.width}px`, pointerEvents: 'auto' }}>
-                                                <div draggable onDragStart={(e) => handleDragStart(e, task, 'move')} onDoubleClick={() => handleEditTask(task)} onMouseEnter={(e) => handleShowTooltip(e, task.notes)} onMouseMove={handleMoveTooltip} onMouseLeave={handleHideTooltip} className={`h-8 rounded-md shadow-sm flex items-center w-full group relative cursor-move ${task.isRescheduled ? 'ring-2 ring-red-500 ring-offset-1' : ''}`} style={{ backgroundColor: task.taskColor || project.color || '#3b82f6' }}>
+                                                <div draggable onDragStart={(e) => handleDragStart(e, task, 'move')} onDoubleClick={() => handleEditTask(task)} onMouseEnter={(e) => handleShowTooltip(e, task.notes)} onMouseMove={handleMoveTooltip} onMouseLeave={handleHideTooltip} className={`h-8 rounded-md shadow-sm flex items-center w-full group relative cursor-move`} style={{ backgroundColor: task.taskColor || project.color || '#3b82f6' }}>
                                                     <div className="absolute top-0 left-0 h-full rounded-l-md" style={{width: `${task.completionPercentage || 0}%`, backgroundColor: 'rgba(0,0,0,0.2)'}}></div>
                                                     <div className="relative z-10 flex items-center justify-between w-full px-2">
                                                         <span className={`text-sm truncate font-medium ${getContrastingTextColor(task.taskColor || project.color)}`}>{task.name}</span>
