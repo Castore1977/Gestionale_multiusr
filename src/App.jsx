@@ -4,7 +4,6 @@ import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWith
 import { getFirestore, collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, setDoc, query, where, writeBatch, getDocs } from 'firebase/firestore';
 import { ArrowRight, Plus, Users, Trash2, Edit, LayoutDashboard, BarChart3, X, AlertTriangle, FileDown, FileUp, CheckCircle, ClipboardList, StickyNote, LogOut } from 'lucide-react';
 
-
 // --- CONFIGURAZIONE FIREBASE ---
 const firebaseConfigString = import.meta.env.VITE_FIREBASE_CONFIG;
 const firebaseConfig = firebaseConfigString ? JSON.parse(firebaseConfigString) : {
@@ -17,6 +16,7 @@ const firebaseConfig = firebaseConfigString ? JSON.parse(firebaseConfigString) :
     appId: import.meta.env.VITE_FIREBASE_APP_ID,
     measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
+
 
 // --- FUNZIONI UTILI (Invariate) ---
 const calculateDaysDifference = (d1, d2) => {
@@ -1077,11 +1077,10 @@ export default function App() {
         };
 
         const userId = user.uid;
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
-        const unsubProjects = onSnapshot(query(collection(db, `artifacts/${appId}/users/${userId}/projects`)), snap => setProjects(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-        const unsubTasks = onSnapshot(query(collection(db, `artifacts/${appId}/users/${userId}/tasks`)), snap => setTasks(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-        const unsubResources = onSnapshot(query(collection(db, `artifacts/${appId}/users/${userId}/resources`)), snap => setResources(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+        const unsubProjects = onSnapshot(query(collection(db, `users/${userId}/projects`)), snap => setProjects(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+        const unsubTasks = onSnapshot(query(collection(db, `users/${userId}/tasks`)), snap => setTasks(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+        const unsubResources = onSnapshot(query(collection(db, `users/${userId}/resources`)), snap => setResources(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
         
         return () => { unsubProjects(); unsubTasks(); unsubResources(); };
     }, [isAuthReady, db, user]);
