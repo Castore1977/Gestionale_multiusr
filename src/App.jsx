@@ -5,7 +5,6 @@ import { getFirestore, collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc
 import { ArrowRight, Plus, Users, Trash2, Edit, LayoutDashboard, BarChart3, X, AlertTriangle, FileDown, FileUp, CheckCircle, ClipboardList, StickyNote, LogOut } from 'lucide-react';
 
 
-
 // --- CONFIGURAZIONE FIREBASE ---
 const firebaseConfigString = import.meta.env.VITE_FIREBASE_CONFIG;
 const firebaseConfig = firebaseConfigString ? JSON.parse(firebaseConfigString) : {
@@ -882,14 +881,11 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
                                         const pos = taskPositions.get(task.id); 
                                         if(!pos) return null; 
                                         
-                                        // --- LOGICA DI VISUALIZZAZIONE CORRETTA ---
-                                        // Mostra il segnaposto solo se l'attività è ripianificata E se la sua posizione o larghezza
-                                        // è effettivamente cambiata rispetto all'originale.
-                                        const showPlaceholder = task.isRescheduled && typeof pos.originalLeft === 'number' && (pos.originalLeft !== pos.left || pos.originalWidth !== pos.width);
+                                        const isPlaceholderVisible = task.isRescheduled && typeof pos.originalLeft === 'number';
 
                                         return (
                                         <div key={task.id} className="absolute" style={{ top: `${pos.top}px`, height: `${ROW_HEIGHT}px`, left: '0px', width: '100%', pointerEvents: 'none' }}>
-                                            {showPlaceholder && (
+                                            {isPlaceholderVisible && (
                                                 <div
                                                     title={`Pianificazione originale: ${new Date(task.originalStartDate).toLocaleDateString()} - ${new Date(task.originalEndDate).toLocaleDateString()}`}
                                                     className="absolute h-8 rounded-md bg-gray-300 border border-dashed border-gray-500 opacity-80"
@@ -901,7 +897,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
                                                 />
                                             )}
                                             <div className="absolute flex items-center" style={{ top: `0px`, height: `${ROW_HEIGHT}px`, left: `${pos.left}px`, width: `${pos.width}px`, pointerEvents: 'auto' }}>
-                                                <div draggable onDragStart={(e) => handleDragStart(e, task, 'move')} onDoubleClick={() => handleEditTask(task)} onMouseEnter={(e) => handleShowTooltip(e, task.notes)} onMouseMove={handleMoveTooltip} onMouseLeave={handleHideTooltip} className="h-8 rounded-md shadow-sm flex items-center w-full group relative cursor-move" style={{ backgroundColor: task.taskColor || project.color || '#3b82f6' }}>
+                                                <div draggable onDragStart={(e) => handleDragStart(e, task, 'move')} onDoubleClick={() => handleEditTask(task)} onMouseEnter={(e) => handleShowTooltip(e, task.notes)} onMouseMove={handleMoveTooltip} onMouseLeave={handleHideTooltip} className={`h-8 rounded-md shadow-sm flex items-center w-full group relative cursor-move ${task.isRescheduled ? 'ring-2 ring-yellow-500' : ''}`} style={{ backgroundColor: task.taskColor || project.color || '#3b82f6' }}>
                                                     <div className="absolute top-0 left-0 h-full rounded-l-md" style={{width: `${task.completionPercentage || 0}%`, backgroundColor: 'rgba(0,0,0,0.2)'}}></div>
                                                     <div className="relative z-10 flex items-center justify-between w-full px-2">
                                                         <span className={`text-sm truncate font-medium ${getContrastingTextColor(task.taskColor || project.color)}`}>{task.name}</span>
