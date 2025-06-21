@@ -5,7 +5,6 @@ import { getFirestore, collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc
 import { ArrowRight, Plus, Users, Trash2, Edit, LayoutDashboard, BarChart3, X, AlertTriangle, FileDown, FileUp, CheckCircle, ClipboardList, StickyNote, LogOut } from 'lucide-react';
 
 
-
 // --- CONFIGURAZIONE FIREBASE ---
 const firebaseConfigString = import.meta.env.VITE_FIREBASE_CONFIG;
 const firebaseConfig = firebaseConfigString ? JSON.parse(firebaseConfigString) : {
@@ -410,16 +409,22 @@ const AssignmentReportView = ({ projectsWithData, resources, onExportPDF }) => {
 };
 
 const CostReportView = ({ projectsWithData, onExportPDF }) => {
-    const { projects, grandTotalCost, grandSpentCost } = useMemo(() => {
-        if (!projectsWithData) return { projects: [], grandTotalCost: 0, grandSpentCost: 0 };
-        let totalCost = 0;
-        let spentCost = 0;
-        const processedProjects = projectsWithData.map(p => {
-            totalCost += p.projectTotalCost + (p.extraCosts || 0);
-            spentCost += p.projectSpentCost + (p.extraCosts || 0);
-            return p;
+    const { projects, grandTotalCost, grandSpentCost, grandTotalBudget } = useMemo(() => {
+        if (!projectsWithData) {
+            return { projects: [], grandTotalCost: 0, grandSpentCost: 0, grandTotalBudget: 0 };
+        }
+
+        let grandTotalCost = 0;
+        let grandSpentCost = 0;
+        let grandTotalBudget = 0;
+        
+        projectsWithData.forEach(p => {
+            grandTotalCost += p.projectTotalCost + (p.extraCosts || 0);
+            grandSpentCost += p.projectSpentCost + (p.extraCosts || 0);
+            grandTotalBudget += p.budget || 0;
         });
-        return { projects: processedProjects, grandTotalCost: totalCost, grandSpentCost: spentCost };
+
+        return { projects: projectsWithData, grandTotalCost, grandSpentCost, grandTotalBudget };
     }, [projectsWithData]);
 
     return (
@@ -481,7 +486,14 @@ const CostReportView = ({ projectsWithData, onExportPDF }) => {
                                     </tr>
                                 ),
                                 <tr key={`${project.id}-total`} className="bg-gray-50">
-                                    <td colSpan="2" className="px-6 py-2 text-sm font-semibold text-right">Totale Progetto</td>
+                                    <td colSpan="2" className="px-6 py-2 text-sm font-semibold text-right">
+                                        Totale Progetto
+                                        {project.budget > 0 && 
+                                            <div className="text-xs font-normal text-gray-600">
+                                                (Budget: {formatCurrency(project.budget)})
+                                            </div>
+                                        }
+                                    </td>
                                     <td className="px-6 py-2 text-right text-sm font-semibold">{formatCurrency(project.projectTotalCost + (project.extraCosts || 0))}</td>
                                     <td className="px-6 py-2 text-right text-sm font-semibold">{formatCurrency(project.projectSpentCost + (project.extraCosts || 0))}</td>
                                 </tr>
@@ -490,7 +502,14 @@ const CostReportView = ({ projectsWithData, onExportPDF }) => {
                     </tbody>
                     <tfoot className="bg-gray-200">
                         <tr>
-                            <td colSpan="2" className="px-6 py-4 text-base font-bold text-right">TOTALE GENERALE</td>
+                            <td colSpan="2" className="px-6 py-4 text-base font-bold text-right">
+                                TOTALE GENERALE
+                                {grandTotalBudget > 0 && 
+                                    <div className="text-sm font-normal">
+                                        (Budget Totale: {formatCurrency(grandTotalBudget)})
+                                    </div>
+                                }
+                            </td>
                             <td className="px-6 py-4 text-right text-base font-bold">{formatCurrency(grandTotalCost)}</td>
                             <td className="px-6 py-4 text-right text-base font-bold">{formatCurrency(grandSpentCost)}</td>
                         </tr>
