@@ -6,6 +6,7 @@ import { ArrowRight, Plus, Users, Trash2, Edit, LayoutDashboard, BarChart3, X, A
 
 
 
+
 // --- CONFIGURAZIONE FIREBASE ---
 const firebaseConfigString = import.meta.env.VITE_FIREBASE_CONFIG;
 const firebaseConfig = firebaseConfigString ? JSON.parse(firebaseConfigString) : {
@@ -124,8 +125,56 @@ const ResourceManagement = ({ resources, db, userId }) => {
 const ProjectForm = ({ project, onDone, db, userId }) => {
     const [name, setName] = useState(project ? project.name : '');
     const [color, setColor] = useState(project ? project.color : '#a855f7');
-    const handleSubmit = async (e) => { e.preventDefault(); if (name.trim() === '' || !userId) return; const projectData = { name: name.trim(), color }; try { if (project && project.id) { await updateDoc(doc(db, `users/${userId}/projects`, project.id), projectData); } else { await addDoc(collection(db, `users/${userId}/projects`), {...projectData, createdAt: new Date().toISOString() }); } onDone(); } catch(error) { console.error("Errore salvataggio progetto", error); } };
-    return ( <form onSubmit={handleSubmit} className="space-y-4"> <div> <label htmlFor="project-name" className="block text-sm font-medium text-gray-700">Nome Progetto</label> <input id="project-name" type="text" value={name} onChange={e => setName(e.target.value)} required className="mt-1 block w-full px-3 py-2 border-gray-300 rounded-md shadow-sm" /> </div> <div> <label htmlFor="project-color" className="block text-sm font-medium text-gray-700">Colore Progetto</label> <input id="project-color" type="color" value={color} onChange={e => setColor(e.target.value)} className="mt-1 w-full h-10 p-1 border border-gray-300 rounded-md"/> </div> <div className="flex justify-end pt-4 gap-2"> <button type="button" onClick={onDone} className="bg-gray-300 text-gray-800 px-4 py-2 rounded-md">Annulla</button> <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-md">{project && project.id ? 'Salva Modifiche' : 'Crea Progetto'}</button> </div> </form> );
+    const [budget, setBudget] = useState(project ? project.budget || '' : '');
+    const [extraCosts, setExtraCosts] = useState(project ? project.extraCosts || '' : '');
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (name.trim() === '' || !userId) return;
+        const projectData = {
+            name: name.trim(),
+            color,
+            budget: Number(budget) || 0,
+            extraCosts: Number(extraCosts) || 0,
+        };
+        try {
+            if (project && project.id) {
+                await updateDoc(doc(db, `users/${userId}/projects`, project.id), projectData);
+            } else {
+                await addDoc(collection(db, `users/${userId}/projects`), { ...projectData, createdAt: new Date().toISOString() });
+            }
+            onDone();
+        } catch (error) {
+            console.error("Errore salvataggio progetto", error);
+        }
+    };
+
+    return (
+        <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+                <label htmlFor="project-name" className="block text-sm font-medium text-gray-700">Nome Progetto</label>
+                <input id="project-name" type="text" value={name} onChange={e => setName(e.target.value)} required className="mt-1 block w-full px-3 py-2 border-gray-300 rounded-md shadow-sm" />
+            </div>
+            <div>
+                <label htmlFor="project-color" className="block text-sm font-medium text-gray-700">Colore Progetto</label>
+                <input id="project-color" type="color" value={color} onChange={e => setColor(e.target.value)} className="mt-1 w-full h-10 p-1 border border-gray-300 rounded-md" />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label htmlFor="project-budget" className="block text-sm font-medium text-gray-700">Budget (€)</label>
+                    <input id="project-budget" type="number" value={budget} onChange={e => setBudget(e.target.value)} placeholder="10000" className="mt-1 block w-full px-3 py-2 border-gray-300 rounded-md shadow-sm" />
+                </div>
+                <div>
+                    <label htmlFor="project-extra-costs" className="block text-sm font-medium text-gray-700">Altre Spese (€)</label>
+                    <input id="project-extra-costs" type="number" value={extraCosts} onChange={e => setExtraCosts(e.target.value)} placeholder="500" className="mt-1 block w-full px-3 py-2 border-gray-300 rounded-md shadow-sm" />
+                </div>
+            </div>
+            <div className="flex justify-end pt-4 gap-2">
+                <button type="button" onClick={onDone} className="bg-gray-300 text-gray-800 px-4 py-2 rounded-md">Annulla</button>
+                <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-md">{project && project.id ? 'Salva Modifiche' : 'Crea Progetto'}</button>
+            </div>
+        </form>
+    );
 };
 
 const TaskForm = ({ db, projects, task, resources, allTasks, onDone, selectedProjectIdForNew, userId }) => {
@@ -364,30 +413,91 @@ const AssignmentReportView = ({ projectsWithData, resources, onExportPDF }) => {
 const CostReportView = ({ projectsWithData, onExportPDF }) => {
     const { projects, grandTotalCost, grandSpentCost } = useMemo(() => {
         if (!projectsWithData) return { projects: [], grandTotalCost: 0, grandSpentCost: 0 };
-        let totalCost = 0; let spentCost = 0;
-        const processedProjects = projectsWithData.map(p => { totalCost += p.projectTotalCost || 0; spentCost += p.projectSpentCost || 0; return p; });
+        let totalCost = 0;
+        let spentCost = 0;
+        const processedProjects = projectsWithData.map(p => {
+            totalCost += p.projectTotalCost + (p.extraCosts || 0);
+            spentCost += p.projectSpentCost + (p.extraCosts || 0);
+            return p;
+        });
         return { projects: processedProjects, grandTotalCost: totalCost, grandSpentCost: spentCost };
     }, [projectsWithData]);
-    
+
     return (
         <div className="p-4 md:p-6 lg:p-8">
-             <div className="flex justify-between items-center mb-6"> <h2 className="text-2xl font-bold text-gray-800">Report Costi</h2> <button onClick={onExportPDF} className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 flex items-center gap-2"> <FileDown size={16}/> Esporta PDF </button> </div>
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-800">Report Costi</h2>
+                <button onClick={onExportPDF} className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 flex items-center gap-2">
+                    <FileDown size={16} /> Esporta PDF
+                </button>
+            </div>
             <div id="cost-report-content" className="bg-white shadow-md rounded-lg overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50"><tr><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Attività</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Risorse</th><th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Costo Stimato</th><th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Costo Sostenuto</th></tr></thead>
+                    <thead className="bg-gray-50">
+                        <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Attività</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Risorse</th>
+                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Costo Stimato</th>
+                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Costo Sostenuto</th>
+                        </tr>
+                    </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                        {projects.flatMap(project => [
-                            <tr key={project.id} className="bg-gray-100"><td colSpan="4" className={`px-6 py-3 text-sm font-bold ${getContrastingTextColor(project.color)}`} style={{backgroundColor: project.color}}><div className="flex justify-between"><span>{project.name}</span><span>{project.projectCompletionPercentage?.toFixed(1) || '0.0'}%</span></div></td></tr>,
-                            ...(project.tasks.length > 0 ? project.tasks.map(task => ( <tr key={task.id}><td className="px-6 py-4 whitespace-nowrap"><p className="text-sm font-medium text-gray-900">{task.name}</p><p className="text-sm text-gray-500">{task.completionPercentage || 0}% completato</p></td><td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{task.assigned.map(r => r.name).join(', ') || 'N/A'}</td><td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">{formatCurrency(task.totalEstimatedCost)}</td><td className="px-6 py-4 whitespace-nowrap text-right text-sm">{formatCurrency(task.spentCost)}</td></tr> )) : [ <tr key={`${project.id}-empty`}><td colSpan="4" className="px-6 py-4 text-sm text-gray-500 italic">Nessuna attività.</td></tr> ]),
-                            <tr key={`${project.id}-total`} className="bg-gray-50"><td colSpan="2" className="px-6 py-2 text-sm font-semibold text-right">Totale Progetto</td><td className="px-6 py-2 text-right text-sm font-semibold">{formatCurrency(project.projectTotalCost)}</td><td className="px-6 py-2 text-right text-sm font-semibold">{formatCurrency(project.projectSpentCost)}</td></tr>
-                        ])}
+                        {projects.flatMap(project => {
+                            const projectTextColor = getContrastingTextColor(project.color);
+                            return [
+                                <tr key={project.id} style={{ backgroundColor: project.color }}>
+                                    <td colSpan="4" className={`px-6 py-3 text-sm font-bold ${projectTextColor}`}>
+                                        <div className="flex justify-between items-center">
+                                            <span>{project.name}</span>
+                                            <div className="text-right">
+                                                <span>Compl: {project.projectCompletionPercentage?.toFixed(1) || '0.0'}%</span>
+                                                {project.budget > 0 && (
+                                                    <div className={`text-xs ${project.budgetSpentPercentage > 100 ? 'font-bold text-red-500' : ''}`} style={{color: project.budgetSpentPercentage > 100 ? '#f87171' : projectTextColor}}>
+                                                        Budget: {project.budgetSpentPercentage.toFixed(1)}%
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>,
+                                ...(project.tasks.length > 0 ? project.tasks.map(task => (
+                                    <tr key={task.id}>
+                                        <td className="px-6 py-4 whitespace-nowrap"><p className="text-sm font-medium text-gray-900">{task.name}</p><p className="text-sm text-gray-500">{task.completionPercentage || 0}% completato</p></td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{task.assigned.map(r => r.name).join(', ') || 'N/A'}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">{formatCurrency(task.totalEstimatedCost)}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm">{formatCurrency(task.spentCost)}</td>
+                                    </tr>
+                                )) : [
+                                    <tr key={`${project.id}-empty`}><td colSpan="4" className="px-6 py-4 text-sm text-gray-500 italic">Nessuna attività.</td></tr>
+                                ]),
+                                (project.extraCosts > 0 &&
+                                    <tr key={`${project.id}-extra`}>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 italic" colSpan="2">Altre Spese</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">{formatCurrency(project.extraCosts)}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm">{formatCurrency(project.extraCosts)}</td>
+                                    </tr>
+                                ),
+                                <tr key={`${project.id}-total`} className="bg-gray-50">
+                                    <td colSpan="2" className="px-6 py-2 text-sm font-semibold text-right">Totale Progetto</td>
+                                    <td className="px-6 py-2 text-right text-sm font-semibold">{formatCurrency(project.projectTotalCost + (project.extraCosts || 0))}</td>
+                                    <td className="px-6 py-2 text-right text-sm font-semibold">{formatCurrency(project.projectSpentCost + (project.extraCosts || 0))}</td>
+                                </tr>
+                            ];
+                        })}
                     </tbody>
-                    <tfoot className="bg-gray-200"><tr><td colSpan="2" className="px-6 py-4 text-base font-bold text-right">TOTALE GENERALE</td><td className="px-6 py-4 text-right text-base font-bold">{formatCurrency(grandTotalCost)}</td><td className="px-6 py-4 text-right text-base font-bold">{formatCurrency(grandSpentCost)}</td></tr></tfoot>
+                    <tfoot className="bg-gray-200">
+                        <tr>
+                            <td colSpan="2" className="px-6 py-4 text-base font-bold text-right">TOTALE GENERALE</td>
+                            <td className="px-6 py-4 text-right text-base font-bold">{formatCurrency(grandTotalCost)}</td>
+                            <td className="px-6 py-4 text-right text-base font-bold">{formatCurrency(grandSpentCost)}</td>
+                        </tr>
+                    </tfoot>
                 </table>
             </div>
         </div>
     );
 };
+
 
 // --- VISTA MASTER ---
 const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
@@ -400,7 +510,6 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
 
     const { overallStartDate, totalDays } = useMemo(() => { 
         if (tasks.length === 0) return { overallStartDate: new Date(), totalDays: 30 };
-        // Considera anche le rescheduledEndDate per calcolare il range totale
         const allDates = tasks.flatMap(t => [new Date(t.startDate), new Date(t.endDate), t.isRescheduled && t.rescheduledEndDate ? new Date(t.rescheduledEndDate) : null]).filter(d => d && !isNaN(d));
         if (allDates.length === 0) return { overallStartDate: new Date(), totalDays: 30 };
         
@@ -426,7 +535,6 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
             taskMap[task.id] = { ...task, startDate, endDate, rescheduledEndDate, effectiveEndDate, duration: duration > 0 ? duration : 1 };
         });
 
-        // Applica i vincoli di dipendenza (Finish-to-Finish)
         for (let i = 0; i < tasks.length * 2; i++) {
             tasks.forEach(task => {
                 if (task.dependencies && task.dependencies.length > 0) {
@@ -481,7 +589,6 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
                 projectTotalHours += totalTaskHours;
                 projectWorkedHours += workedHours;
 
-                // Calcola la posizione e le dimensioni della barra "fantasma" usando le date originali
                 const originalStartDateForCalc = new Date(task.originalStartDate || task.startDate);
                 const originalEndDateForCalc = new Date(task.originalEndDate || task.endDate);
                 const originalDuration = calculateDaysDifference(originalStartDateForCalc, originalEndDateForCalc) + 1;
@@ -500,8 +607,14 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
             });
             
             if (projectTasks.length === 0) { currentY += ROW_HEIGHT; }
+            
             const projectCompletionPercentage = totalDuration > 0 ? weightedCompletion / totalDuration : 0;
-            return { ...p, tasks: enrichedTasks, projectCompletionPercentage, projectTotalCost, projectSpentCost, projectTotalHours, projectWorkedHours, projectTop };
+            const budget = p.budget || 0;
+            const extraCosts = p.extraCosts || 0;
+            const totalSpentWithExtra = projectSpentCost + extraCosts;
+            const budgetSpentPercentage = budget > 0 ? (totalSpentWithExtra / budget) * 100 : 0;
+
+            return { ...p, tasks: enrichedTasks, projectCompletionPercentage, projectTotalCost, projectSpentCost, budget, extraCosts, budgetSpentPercentage, projectTop };
         }); 
         return { projectsWithData: pWithData, taskPositions: positions, ganttHeight: currentY };
     }, [tasks, projects, resources, dateHeaders, DAY_WIDTH, ROW_HEIGHT, PROJECT_HEADER_HEIGHT]);
@@ -598,7 +711,15 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
                     data.cell.styles.fillColor = bgColor;
                     const hexColor = convertToHex(bgColor);
                     const fontColor = getContrastingTextColor(hexColor);
-                    data.cell.styles.textColor = fontColor === 'text-black' ? '#000000' : '#FFFFFF';
+                    
+                    // Special handling for budget percentage
+                    const budgetSpan = raw.querySelector('.budget-percentage-pdf');
+                    if (budgetSpan && budgetSpan.classList.contains('over-budget')) {
+                        data.cell.styles.textColor = '#d32f2f'; // Red color for over-budget text
+                    } else {
+                        data.cell.styles.textColor = fontColor === 'text-black' ? '#000000' : '#FFFFFF';
+                    }
+                    
                     data.cell.styles.halign = raw.style.textAlign || 'left';
                 }
             }
@@ -708,7 +829,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
                                 {projectsWithData.map(project => (
                                     <div key={project.id} className="group/project">
                                         <div onClick={() => setSelectedProjectId(project.id)} className={`flex items-center justify-between p-2 px-4 cursor-pointer transition-all border-b border-r ${selectedProjectId === project.id ? 'bg-blue-200 border-l-4 border-blue-600' : 'bg-white'}`} style={{height: `${PROJECT_HEADER_HEIGHT}px`}}>
-                                            <div className="flex items-center gap-3 flex-grow overflow-hidden"><span className="w-4 h-4 rounded-full flex-shrink-0" style={{backgroundColor: project.color}}></span> <div className="flex-grow overflow-hidden"><h3 className="font-bold text-gray-800 truncate">{project.name}</h3> <div className="w-full bg-gray-300 rounded-full h-1.5 mt-1"><div className="bg-green-500 h-1.5 rounded-full" style={{width: `${project.projectCompletionPercentage.toFixed(0)}%`}}></div></div><span className="text-xs text-gray-500">{project.projectCompletionPercentage.toFixed(1)}%</span></div></div><div className="flex items-center gap-2 flex-shrink-0 opacity-0 group-hover/project:opacity-100 transition-opacity"><button onClick={(e) => {e.stopPropagation(); handleEditProject(project)}} className="p-1 text-gray-500 hover:text-blue-600"><Edit size={16}/></button><button onClick={(e) => {e.stopPropagation(); confirmDeleteItem(project, 'project')}} className="p-1 text-gray-500 hover:text-red-600"><Trash2 size={16}/></button></div>
+                                            <div className="flex items-center gap-3 flex-grow overflow-hidden"><span className="w-4 h-4 rounded-full flex-shrink-0" style={{backgroundColor: project.color}}></span> <div className="flex-grow overflow-hidden"><h3 className="font-bold text-gray-800 truncate">{project.name}</h3> <div className="w-full bg-gray-300 rounded-full h-1.5 mt-1"><div className="bg-green-500 h-1.5 rounded-full" style={{width: `${project.projectCompletionPercentage.toFixed(0)}%`}}></div></div><span className="text-xs text-gray-500">Compl: {project.projectCompletionPercentage.toFixed(1)}%</span> {project.budget > 0 && (<span className={`text-xs ml-2 ${project.budgetSpentPercentage > 100 ? 'text-red-600 font-bold' : 'text-gray-500'}`}>Budget: {project.budgetSpentPercentage.toFixed(1)}%</span>)}</div></div><div className="flex items-center gap-2 flex-shrink-0 opacity-0 group-hover/project:opacity-100 transition-opacity"><button onClick={(e) => {e.stopPropagation(); handleEditProject(project)}} className="p-1 text-gray-500 hover:text-blue-600"><Edit size={16}/></button><button onClick={(e) => {e.stopPropagation(); confirmDeleteItem(project, 'project')}} className="p-1 text-gray-500 hover:text-red-600"><Trash2 size={16}/></button></div>
                                         </div>
                                         {project.tasks.map(task => (
                                             <div key={task.id} className="flex items-center group/task p-2 pl-9 border-b border-r bg-gray-50" style={{height: `${ROW_HEIGHT}px`}} onDoubleClick={() => handleEditTask(task)}>
@@ -727,18 +848,16 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
                                     <div className="absolute top-0 left-0 h-full w-0.5 bg-red-500 opacity-75 z-20" style={{ transform: `translateX(${todayMarkerPosition}px)`}}></div>
                                     {projectsWithData.map(project => project.tasks.map(task => { const pos = taskPositions.get(task.id); if(!pos) return null; return (
                                         <div key={task.id} className="absolute" style={{ top: `${pos.top}px`, height: `${ROW_HEIGHT}px`, left: '0px', width: '100%', pointerEvents: 'none' }}>
-                                            {/* Ghost Bar per attività ripianificate */}
                                             {pos.isRescheduled && (
                                                 <div
                                                     className="absolute h-8 rounded-md bg-red-200 opacity-70 border-2 border-dashed border-red-500"
                                                     style={{
-                                                        top: '16px', // Centra verticalmente
+                                                        top: '16px', 
                                                         left: `${pos.originalLeft}px`,
                                                         width: `${pos.originalWidth}px`,
                                                     }}
                                                 />
                                             )}
-                                            {/* Barra Principale */}
                                             <div className="absolute flex items-center" style={{ top: `0px`, height: `${ROW_HEIGHT}px`, left: `${pos.left}px`, width: `${pos.width}px`, pointerEvents: 'auto' }}>
                                                 <div draggable onDragStart={(e) => handleDragStart(e, task, 'move')} onDoubleClick={() => handleEditTask(task)} onMouseEnter={(e) => handleShowTooltip(e, task.notes)} onMouseMove={handleMoveTooltip} onMouseLeave={handleHideTooltip} className={`h-8 rounded-md shadow-sm flex items-center w-full group relative cursor-move ${task.isRescheduled ? 'ring-2 ring-red-500 ring-offset-1' : ''}`} style={{ backgroundColor: task.taskColor || project.color || '#3b82f6' }}>
                                                     <div className="absolute top-0 left-0 h-full rounded-l-md" style={{width: `${task.completionPercentage || 0}%`, backgroundColor: 'rgba(0,0,0,0.2)'}}></div>
@@ -797,7 +916,7 @@ const AuthScreen = ({ auth, setNotification }) => {
         } catch (error) {
             console.error(`Errore durante ${isLogin ? 'il login' : 'la registrazione'}:`, error);
             let message = "Si è verificato un errore.";
-            if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+            if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
                 message = "Email o password non validi.";
             } else if (error.code === 'auth/email-already-in-use') {
                 message = "Questo indirizzo email è già stato registrato.";
@@ -871,11 +990,11 @@ export default function App() {
                 return () => unsubscribe();
             } else { 
                 console.error("Configurazione Firebase non fornita o incompleta."); 
-                setIsAuthReady(true); // Allow AuthScreen to show
+                setIsAuthReady(true);
             } 
         } catch(e) { 
             console.error("Errore inizializzazione Firebase:", e); 
-            setIsAuthReady(true); // Allow AuthScreen to show
+            setIsAuthReady(true);
         }
     }, []);
 
@@ -913,4 +1032,5 @@ export default function App() {
     
     return <MainDashboard projects={projects} tasks={tasks} resources={resources} db={db} userId={user.uid} auth={auth} />;
 }
+
 
