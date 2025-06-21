@@ -5,6 +5,7 @@ import { getFirestore, collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc
 import { ArrowRight, Plus, Users, Trash2, Edit, LayoutDashboard, BarChart3, X, AlertTriangle, FileDown, FileUp, CheckCircle, ClipboardList, StickyNote, LogOut } from 'lucide-react';
 
 
+
 // --- CONFIGURAZIONE FIREBASE ---
 const firebaseConfigString = import.meta.env.VITE_FIREBASE_CONFIG;
 const firebaseConfig = firebaseConfigString ? JSON.parse(firebaseConfigString) : {
@@ -274,7 +275,7 @@ const ActivityReportView = ({ projectsWithData, onExportPDF }) => {
         const overdueTasks = []; const dueTodayTasks = []; const dueInThreeDaysTasks = []; const otherTasks = [];
 
         allEnrichedTasks.forEach(task => {
-            const endDateToUse = task.effectiveEndDate || task.endDate; // <-- MODIFICA QUI
+            const endDateToUse = task.effectiveEndDate || task.endDate; 
             const d = new Date(endDateToUse);
             d.setHours(0, 0, 0, 0);
             const isComplete = (task.completionPercentage || 0) >= 100;
@@ -325,11 +326,11 @@ const AssignmentReportView = ({ projectsWithData, resources, onExportPDF }) => {
         return resources.map(resource => {
             const assignedTasks = allTasks
                 .filter(task => task.assignedResources?.includes(resource.id))
-                .sort((a, b) => new Date(a.effectiveEndDate || a.endDate) - new Date(b.effectiveEndDate || b.endDate)); // <-- MODIFICA QUI
+                .sort((a, b) => new Date(a.effectiveEndDate || a.endDate) - new Date(b.effectiveEndDate || b.endDate)); 
             let dailyWorkload = 0;
             const activeTasksToday = allTasks.filter(task => {
                 const startDate = new Date(task.startDate);
-                const endDate = new Date(task.effectiveEndDate || task.endDate); // <-- MODIFICA QUI
+                const endDate = new Date(task.effectiveEndDate || task.endDate); 
                 startDate.setHours(0, 0, 0, 0);
                 endDate.setHours(0, 0, 0, 0);
                 return task.assignedResources?.includes(resource.id) && today >= startDate && today <= endDate;
@@ -559,7 +560,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
     const exportData = () => { const dataToExport = { projects, tasks, resources, exportedAt: new Date().toISOString() }; const dataStr = JSON.stringify(dataToExport, null, 2); const blob = new Blob([dataStr], {type: "application/json"}); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `gantt_backup_${new Date().toISOString().split('T')[0]}.json`; document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url); setNotification({message: "Esportazione completata.", type: "success"}); };
     const handleFileImportChange = (e) => { const file = e.target.files[0]; if (file) { setImportFile(file); setIsImportConfirmOpen(true); } e.target.value = null; };
     
-    const importData = async () => { if (!importFile || !userId) return; setIsLoading(true); setLoadingMessage("Importazione in corso..."); const reader = new FileReader(); reader.onload = async (e) => { try { const data = JSON.parse(e.target.result); if (!data.projects || !data.tasks || !data.resources) { throw new Error("Formato file non valido."); } setLoadingMessage("Cancellazione dati esistenti..."); const collectionsToDelete = ['tasks', 'resources', 'projects']; for (const coll of collectionsToDelete) { const userCollRef = collection(db, `users/${userId}/${coll}`); const snapshot = await getDocs(userCollRef); const batch = writeBatch(db); snapshot.docs.forEach(d => batch.delete(d.ref)); await batch.commit(); } setLoadingMessage("Importazione nuovi dati..."); const importBatch = writeBatch(db); data.projects.forEach(p => importBatch.set(doc(collection(db, `users/${userId}/projects`)), p)); data.tasks.forEach(t => importBatch.set(doc(collection(db, `users/${userId}/tasks`)), t)); data.resources.forEach(r => importBatch.set(doc(collection(db, `users/${userId}/resources`)), r)); await importBatch.commit(); setNotification({message: "Importazione completata!", type: "success"}); } catch (error) { console.error("Errore importazione:", error); setNotification({message: `Errore importazione: ${error.message}`, type: "error"}); } finally { setIsLoading(false); setImportFile(null); setIsImportConfirmOpen(false); } }; reader.readAsText(importFile); };
+    const importData = async () => { if (!importFile || !userId) return; setIsLoading(true); setLoadingMessage("Importazione in corso..."); const reader = new FileReader(); reader.onload = async (e) => { try { const data = JSON.parse(e.target.result); if (!data.projects || !data.tasks || !data.resources) { throw new Error("Formato file non valido."); } setLoadingMessage("Cancellazione dati esistenti..."); const collectionsToDelete = ['tasks', 'resources', 'projects']; for (const coll of collectionsToDelete) { const userCollRef = collection(db, `users/${userId}/${coll}`); const snapshot = await getDocs(userCollRef); const batch = writeBatch(db); snapshot.docs.forEach(d => batch.delete(d.ref)); await batch.commit(); } setLoadingMessage("Importazione nuovi dati..."); const importBatch = writeBatch(db); data.projects.forEach(p => {const {id, ...rest} = p; importBatch.set(doc(collection(db, `users/${userId}/projects`)), rest)}); data.tasks.forEach(t => {const {id, ...rest} = t; importBatch.set(doc(collection(db, `users/${userId}/tasks`)), rest)}); data.resources.forEach(r => {const {id, ...rest} = r; importBatch.set(doc(collection(db, `users/${userId}/resources`)), rest)}); await importBatch.commit(); setNotification({message: "Importazione completata!", type: "success"}); } catch (error) { console.error("Errore importazione:", error); setNotification({message: `Errore importazione: ${error.message}`, type: "error"}); } finally { setIsLoading(false); setImportFile(null); setIsImportConfirmOpen(false); } }; reader.readAsText(importFile); };
     
     const exportToPDF = (reportType) => {
         const { jsPDF } = window.jspdf;
@@ -729,7 +730,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
                                             {/* Ghost Bar per attività ripianificate */}
                                             {pos.isRescheduled && (
                                                 <div
-                                                    className="absolute h-8 rounded-md bg-gray-300 opacity-60 border-2 border-dashed border-gray-500"
+                                                    className="absolute h-8 rounded-md bg-red-200 opacity-70 border-2 border-dashed border-red-500"
                                                     style={{
                                                         top: '16px', // Centra verticalmente
                                                         left: `${pos.originalLeft}px`,
@@ -739,7 +740,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
                                             )}
                                             {/* Barra Principale */}
                                             <div className="absolute flex items-center" style={{ top: `0px`, height: `${ROW_HEIGHT}px`, left: `${pos.left}px`, width: `${pos.width}px`, pointerEvents: 'auto' }}>
-                                                <div draggable onDragStart={(e) => handleDragStart(e, task, 'move')} onDoubleClick={() => handleEditTask(task)} onMouseEnter={(e) => handleShowTooltip(e, task.notes)} onMouseMove={handleMoveTooltip} onMouseLeave={handleHideTooltip} className={`h-8 rounded-md shadow-sm flex items-center w-full group relative cursor-move ${task.isRescheduled ? 'ring-2 ring-yellow-400 ring-offset-1' : ''}`} style={{ backgroundColor: task.taskColor || project.color || '#3b82f6' }}>
+                                                <div draggable onDragStart={(e) => handleDragStart(e, task, 'move')} onDoubleClick={() => handleEditTask(task)} onMouseEnter={(e) => handleShowTooltip(e, task.notes)} onMouseMove={handleMoveTooltip} onMouseLeave={handleHideTooltip} className={`h-8 rounded-md shadow-sm flex items-center w-full group relative cursor-move ${task.isRescheduled ? 'ring-2 ring-red-500 ring-offset-1' : ''}`} style={{ backgroundColor: task.taskColor || project.color || '#3b82f6' }}>
                                                     <div className="absolute top-0 left-0 h-full rounded-l-md" style={{width: `${task.completionPercentage || 0}%`, backgroundColor: 'rgba(0,0,0,0.2)'}}></div>
                                                     <div className="relative z-10 flex items-center justify-between w-full px-2">
                                                         <span className={`text-sm truncate font-medium ${getContrastingTextColor(task.taskColor || project.color)}`}>{task.name}</span>
@@ -795,7 +796,13 @@ const AuthScreen = ({ auth, setNotification }) => {
             }
         } catch (error) {
             console.error(`Errore durante ${isLogin ? 'il login' : 'la registrazione'}:`, error);
-            setNotification({ message: error.message, type: 'error' });
+            let message = "Si è verificato un errore.";
+            if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+                message = "Email o password non validi.";
+            } else if (error.code === 'auth/email-already-in-use') {
+                message = "Questo indirizzo email è già stato registrato.";
+            }
+            setNotification({ message: message, type: 'error' });
         } finally {
             setIsLoading(false);
         }
@@ -849,7 +856,7 @@ export default function App() {
         scripts.forEach(scriptInfo => { if (!document.getElementById(scriptInfo.id)) { const script = document.createElement('script'); script.id = scriptInfo.id; script.src = scriptInfo.src; script.async = false; document.head.appendChild(script); } });
         
         try { 
-            if (Object.keys(firebaseConfig).length > 5 && firebaseConfig.apiKey) { 
+            if (Object.keys(firebaseConfig).length > 5 && firebaseConfig.apiKey !== "YOUR_API_KEY") { 
                 const initializedApp = initializeApp(firebaseConfig); 
                 const authInstance = getAuth(initializedApp);
                 const firestoreInstance = getFirestore(initializedApp);
@@ -864,11 +871,11 @@ export default function App() {
                 return () => unsubscribe();
             } else { 
                 console.error("Configurazione Firebase non fornita o incompleta."); 
-                setIsAuthReady(true);
+                setIsAuthReady(true); // Allow AuthScreen to show
             } 
         } catch(e) { 
             console.error("Errore inizializzazione Firebase:", e); 
-            setIsAuthReady(true); 
+            setIsAuthReady(true); // Allow AuthScreen to show
         }
     }, []);
 
@@ -891,11 +898,11 @@ export default function App() {
         return () => { unsubProjects(); unsubTasks(); unsubResources(); };
     }, [isAuthReady, db, user]);
 
-    if (!isAuthReady || !auth) {
+    if (!isAuthReady) {
         return <div className="h-screen w-screen flex justify-center items-center bg-gray-100"><div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500 mr-4"></div><div className="text-xl font-semibold">Caricamento...</div></div>;
     }
 
-    if (!user) {
+    if (!user || !auth) {
         return (
             <>
                 <Notification message={notification.message} type={notification.type} onClose={() => setNotification({ message: '' })} />
@@ -906,3 +913,4 @@ export default function App() {
     
     return <MainDashboard projects={projects} tasks={tasks} resources={resources} db={db} userId={user.uid} auth={auth} />;
 }
+
