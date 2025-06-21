@@ -516,68 +516,436 @@ const CostReportView = ({ projectsWithData, onExportPDF }) => {
                                 TOTALE GENERALE
                                 {grandTotalBudget > 0 && 
                                     <div className="text-sm font-normal">
-              _height: `${ROW_HEIGHT}px`, left: '0px', width: '100%', pointerEvents: 'none' }}>
-
-                {/* Main task bar (rendered first, lower z-index implicitly) */}
-                <div className="absolute flex items-center" style={{ top: `0px`, height: `${ROW_HEIGHT}px`, left: `${pos.left}px`, width: `${pos.width}px`, pointerEvents: 'auto', zIndex: 10 }}>
-                    <div draggable onDragStart={(e) => handleDragStart(e, task, 'move')} onDoubleClick={() => handleEditTask(task)} onMouseEnter={(e) => handleShowTooltip(e, task.notes)} onMouseMove={handleMoveTooltip} onMouseLeave={handleHideTooltip} className={`h-8 rounded-md shadow-sm flex items-center w-full group relative cursor-move box-border ${task.isRescheduled ? 'border-2 border-yellow-500' : ''}`} style={{ backgroundColor: task.taskColor || project.color || '#3b82f6' }}>
-                        <div className="absolute top-0 left-0 h-full rounded-l-md" style={{width: `${task.completionPercentage || 0}%`, backgroundColor: 'rgba(0,0,0,0.2)'}}></div>
-                        <div className="relative z-10 flex items-center justify-between w-full px-2">
-                            <span className={`text-sm truncate font-medium ${getContrastingTextColor(task.taskColor || project.color)}`}>{task.name}</span>
-                            {task.notes && task.notes.trim() !== '' && ( <StickyNote size={16} className={`flex-shrink-0 ${getContrastingTextColor(task.taskColor || project.color)}`} aria-label="Questa attività ha una nota" /> )}
-                        </div>
-                        <div draggable onDragStart={(e) => { e.stopPropagation(); handleDragStart(e, task, 'resize-start'); }} className="absolute left-0 top-0 w-2 h-full cursor-ew-resize z-20" />
-                        <div draggable onDragStart={(e) => { e.stopPropagation(); handleDragStart(e, task, 'resize-end'); }} className="absolute right-0 top-0 w-2 h-full cursor-ew-resize z-20" />
-                    </div>
-                </div>
-
-                {/* Placeholder for original position (rendered second, higher z-index) */}
-                                        {isPlaceholderVisible && (
-                                            <div
-                                                title={`Pianificazione originale: ${new Date(task.originalStartDate).toLocaleDateString()} - ${new Date(task.originalEndDate).toLocaleDateString()}`}
-                                                className="absolute h-8 rounded-md bg-gray-300 border border-dashed border-gray-500 opacity-80"
-                                                style={{
-                                                    top: '16px', 
-                                                    left: `${pos.originalLeft}px`,
-                                                    width: `${pos.originalWidth}px`,
-                                                    zIndex: 20 // Higher z-index to ensure it's on top
-                                                }}
-                                            />
-                                        )}
-
-                {/* Line indicator for the shift */}
-                                        {isPlaceholderVisible && (() => {
-                                            const dayDiff = calculateDaysDifference(new Date(task.originalStartDate), new Date(task.startDate));
-                                            const isForward = dayDiff > 0;
-                                            const lineStart = isForward ? pos.originalLeft + pos.originalWidth : pos.left + pos.width;
-                                            const lineEnd = isForward ? pos.left : pos.originalLeft;
-                                            const lineWidth = Math.max(0, lineEnd - lineStart);
-
-                                            if (lineWidth <= 0) return null;
-
-                                            return (
-                                                <div
-                                                    className="absolute top-1/2 -translate-y-1/2 h-px border-t border-dashed border-yellow-600"
-                                                    style={{
-                                                        left: `${lineStart}px`,
-                                                        width: `${lineWidth}px`,
-                                                        zIndex: 15 // Between task and placeholder
-                                                    }}
-                                                    title={`Spostato di ${dayDiff} giorni`}
-                                                >
-                                                    <div
-                                                        className="absolute top-1/2 -translate-y-1/2 w-2 h-2 bg-yellow-600"
-                                                        style={{
-                                                            right: isForward ? '-4px' : 'auto',
-                                                            left: !isForward ? '-4px' : 'auto',
-                                                            clipPath: isForward ? 'polygon(0% 0%, 100% 50%, 0% 100%)' : 'polygon(100% 0%, 0% 50%, 100% 100%)'
-                                                        }}
-                                                    ></div>
-                                                </div>
-                                            );
-                                        })()}
+                                        (Budget Totale: {formatCurrency(grandTotalBudget)})
                                     </div>
-                                    )}))}
+                                }
+                            </td>
+                            <td className="px-6 py-4 text-right text-base font-bold">{formatCurrency(grandTotalCost)}</td>
+                            <td className="px-6 py-4 text-right text-base font-bold">{formatCurrency(grandSpentCost)}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    );
+};
+
+
+// --- VISTA MASTER ---
+const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
+    const [view, setView] = useState('gantt'); const [isLoading, setIsLoading] = useState(false); const [loadingMessage, setLoadingMessage] = useState(''); const [notification, setNotification] = useState({ message: '', type: 'info' }); const [isTaskModalOpen, setIsTaskModalOpen] = useState(false); const [isResourceModalOpen, setIsResourceModalOpen] = useState(false); const [isProjectModalOpen, setIsProjectModalOpen] = useState(false); const [editingTask, setEditingTask] = useState(null); const [editingProject, setEditingProject] = useState(null); const [isImportConfirmOpen, setIsImportConfirmOpen] = useState(false); const [importFile, setImportFile] = useState(null); const [selectedProjectId, setSelectedProjectId] = useState(null); const dragInfo = useRef({}); const fileInputRef = useRef(null);
+    const [itemToDelete, setItemToDelete] = useState(null);
+    const ganttContainerRef = useRef(null);
+    const [tooltip, setTooltip] = useState({ visible: false, content: '', x: 0, y: 0 });
+    
+    const ROW_HEIGHT = 64; const DAY_WIDTH = 40; const PROJECT_HEADER_HEIGHT = 64; const SIDEBAR_WIDTH = 384;
+
+    const { overallStartDate, totalDays } = useMemo(() => { 
+        if (tasks.length === 0) return { overallStartDate: new Date(), totalDays: 30 };
+        const allDates = tasks.flatMap(t => [new Date(t.startDate), new Date(t.endDate), t.isRescheduled && t.rescheduledEndDate ? new Date(t.rescheduledEndDate) : null]).filter(d => d && !isNaN(d));
+        if (allDates.length === 0) return { overallStartDate: new Date(), totalDays: 30 };
+        
+        const minDate = new Date(Math.min(...allDates)); 
+        const maxDate = new Date(Math.max(...allDates)); 
+        if (isNaN(minDate) || isNaN(maxDate)) return { overallStartDate: new Date(), totalDays: 30 };
+        const diff = calculateDaysDifference(minDate, maxDate) + 5; 
+        return { overallStartDate: minDate, totalDays: diff > 30 ? diff : 30 };
+    }, [tasks]);
+
+    const dateHeaders = useMemo(() => { const headers = []; let currentDate = new Date(overallStartDate); currentDate.setDate(currentDate.getDate() - 1); for (let i = 0; i < totalDays + 2; i++) { headers.push(new Date(currentDate)); currentDate.setDate(currentDate.getDate() + 1); } return headers; }, [overallStartDate, totalDays]);
+    
+    const { projectsWithData, taskPositions, ganttHeight } = useMemo(() => {
+        if (!projects || !tasks || !resources || dateHeaders.length === 0) return { projectsWithData: [], taskPositions: new Map(), ganttHeight: 0 };
+        
+        const taskMap = {};
+        tasks.forEach(task => {
+            const startDate = new Date(task.startDate);
+            const endDate = new Date(task.endDate);
+            const rescheduledEndDate = (task.isRescheduled && task.rescheduledEndDate) ? new Date(task.rescheduledEndDate) : null;
+            const effectiveEndDate = rescheduledEndDate || endDate;
+            const duration = calculateDaysDifference(startDate, effectiveEndDate) + 1;
+            taskMap[task.id] = { ...task, startDate, endDate, rescheduledEndDate, effectiveEndDate, duration: duration > 0 ? duration : 1 };
+        });
+
+        for (let i = 0; i < tasks.length * 2; i++) {
+            tasks.forEach(task => {
+                if (task.dependencies && task.dependencies.length > 0) {
+                    let maxPredecessorEndDate = new Date(0);
+                    task.dependencies.forEach(depId => {
+                        const predecessor = taskMap[depId];
+                        if (predecessor && predecessor.effectiveEndDate > maxPredecessorEndDate) {
+                            maxPredecessorEndDate = predecessor.effectiveEndDate;
+                        }
+                    });
+
+                    if (maxPredecessorEndDate > new Date(0)) {
+                        const successorTask = taskMap[task.id];
+                        if (successorTask.effectiveEndDate < maxPredecessorEndDate) {
+                            const duration = successorTask.duration;
+                            const newEndDate = new Date(maxPredecessorEndDate);
+                            const newStartDate = new Date(newEndDate);
+                            newStartDate.setDate(newEndDate.getDate() - duration + 1);
+                            taskMap[task.id].startDate = newStartDate;
+                            taskMap[task.id].effectiveEndDate = newEndDate;
+                        }
+                    }
+                }
+            });
+        }
+        
+        const processedTasks = Object.values(taskMap);
+        const positions = new Map();
+        let currentY = 0;
+
+        const pWithData = projects.sort((a,b) => a.name.localeCompare(b.name)).map(p => { 
+            const projectTasks = processedTasks.filter(t => t.projectId === p.id).sort((a,b) => (a.order || 0) - (b.order || 0));
+            let totalDuration = 0; let weightedCompletion = 0; let projectTotalCost = 0; let projectSpentCost = 0; let projectTotalHours = 0; let projectWorkedHours = 0;
+            const projectTop = currentY;
+            currentY += PROJECT_HEADER_HEIGHT;
+
+            const enrichedTasks = projectTasks.map(task => {
+                const duration = calculateDaysDifference(task.startDate, task.effectiveEndDate) + 1;
+                const completion = task.completionPercentage || 0;
+                const dailyHours = task.dailyHours || 8;
+                const totalTaskHours = duration * dailyHours;
+                const workedHours = totalTaskHours * (completion / 100);
+                const assigned = task.assignedResources?.map(resId => resources.find(r => r.id === resId)).filter(Boolean) || [];
+                const totalHourlyRate = assigned.reduce((sum, res) => sum + (res.hourlyCost || 0), 0);
+                const totalEstimatedCost = totalTaskHours * totalHourlyRate;
+                const spentCost = totalEstimatedCost * (completion / 100);
+
+                totalDuration += duration;
+                weightedCompletion += duration * completion;
+                projectTotalCost += totalEstimatedCost;
+                projectSpentCost += spentCost;
+                projectTotalHours += totalTaskHours;
+                projectWorkedHours += workedHours;
+
+                const pos = {
+                    top: currentY,
+                    left: calculateDaysDifference(dateHeaders[0], task.startDate) * DAY_WIDTH,
+                    width: (duration > 0 ? duration : 1) * DAY_WIDTH,
+                };
+                
+                if (task.originalStartDate && task.originalEndDate) {
+                    const originalStartDateForCalc = new Date(task.originalStartDate);
+                    const originalEndDateForCalc = new Date(task.originalEndDate);
+                    const originalDuration = calculateDaysDifference(originalStartDateForCalc, originalEndDateForCalc) + 1;
+                    
+                    pos.originalLeft = calculateDaysDifference(dateHeaders[0], originalStartDateForCalc) * DAY_WIDTH;
+                    pos.originalWidth = (originalDuration > 0 ? originalDuration : 1) * DAY_WIDTH;
+                }
+
+                positions.set(task.id, pos);
+                
+                currentY += ROW_HEIGHT;
+                return {...task, assigned, totalTaskHours, workedHours, totalEstimatedCost, spentCost };
+            });
+            
+            if (projectTasks.length === 0) { currentY += ROW_HEIGHT; }
+            
+            const projectCompletionPercentage = totalDuration > 0 ? weightedCompletion / totalDuration : 0;
+            const budget = p.budget || 0;
+            const extraCosts = p.extraCosts || 0;
+            const totalEstimatedCostWithExtras = projectTotalCost + extraCosts;
+            const budgetUsagePercentage = budget > 0 ? (totalEstimatedCostWithExtras / budget) * 100 : 0;
+
+            return { ...p, tasks: enrichedTasks, projectCompletionPercentage, projectTotalCost, projectSpentCost, budget, extraCosts, budgetUsagePercentage, projectTop };
+        }); 
+        return { projectsWithData: pWithData, taskPositions: positions, ganttHeight: currentY };
+    }, [tasks, projects, resources, dateHeaders, DAY_WIDTH, ROW_HEIGHT, PROJECT_HEADER_HEIGHT]);
+
+    const arrowPaths = useMemo(() => {
+        const paths = [];
+        if (!tasks || taskPositions.size === 0) return paths;
+        tasks.forEach(task => {
+            if (task.dependencies && task.dependencies.length > 0) {
+                const successorPos = taskPositions.get(task.id);
+                if (!successorPos) return;
+                task.dependencies.forEach(predecessorId => {
+                    const predecessorPos = taskPositions.get(predecessorId);
+                    if (!predecessorPos) return;
+                    const startX = predecessorPos.left + predecessorPos.width; const startY = predecessorPos.top + (ROW_HEIGHT / 2);
+                    const endX = successorPos.left; const endY = successorPos.top + (ROW_HEIGHT / 2);
+                    const path = `M ${startX} ${startY} L ${startX + DAY_WIDTH / 2} ${startY} L ${startX + DAY_WIDTH / 2} ${endY} L ${endX} ${endY}`;
+                    paths.push({id: `${predecessorId}-${task.id}`, d: path});
+                });
+            }
+        });
+        return paths;
+    }, [tasks, taskPositions, DAY_WIDTH, ROW_HEIGHT]);
+
+    const handleEditTask = (task) => { setEditingTask(tasks.find(t=>t.id === task.id)); setIsTaskModalOpen(true); };
+    const handleEditProject = (project) => { setEditingProject(project); setIsProjectModalOpen(true); };
+    const handleOpenNewProjectModal = () => { const existingColors = projects.map(p => p.color); let newColor; do { newColor = `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`; } while (existingColors.includes(newColor)); setEditingProject({ name: '', color: newColor }); setIsProjectModalOpen(true); };
+    const confirmDeleteItem = (item, type) => setItemToDelete({item, type});
+    
+    const handleDeleteItem = async () => {
+        if (!itemToDelete || !userId) return;
+        const { item, type } = itemToDelete;
+        setIsLoading(true); setLoadingMessage("Cancellazione...");
+        try {
+            const batch = writeBatch(db);
+            if (type === 'task') {
+                const tasksToUpdate = tasks.filter(t => t.dependencies?.includes(item.id));
+                tasksToUpdate.forEach(t => { const taskRef = doc(db, `users/${userId}/tasks`, t.id); batch.update(taskRef, { dependencies: t.dependencies.filter(depId => depId !== item.id) }); });
+                const taskRef = doc(db, `users/${userId}/tasks`, item.id); batch.delete(taskRef);
+                setNotification({message: "Attività eliminata.", type: "success"});
+            } else if (type === 'project') {
+                const tasksQuery = query(collection(db, `users/${userId}/tasks`), where("projectId", "==", item.id));
+                const tasksSnapshot = await getDocs(tasksQuery);
+                tasksSnapshot.forEach(d => batch.delete(d.ref));
+                const projectRef = doc(db, `users/${userId}/projects`, item.id); batch.delete(projectRef);
+                setNotification({message: "Progetto e attività eliminate.", type: "success"});
+            }
+            await batch.commit();
+        } catch (error) { console.error("Errore eliminazione:", error); setNotification({message: `Errore: ${error.message}`, type: "error"});
+        } finally { setItemToDelete(null); setIsLoading(false); }
+    };
+    
+    const handleGanttDrop = async (e) => { e.preventDefault(); if (!userId) return; const { taskId, type, initialX, initialStartDate, initialEndDate, isRescheduled, initialRescheduledEndDate } = dragInfo.current; if (!taskId) return; const dateOffset = Math.round((e.clientX - initialX) / DAY_WIDTH); let newStartDate, newEndDate, newRescheduledEndDate; const taskRef = doc(db, `users/${userId}/tasks`, taskId); let updateData = {}; if (type === 'move') { const duration = calculateDaysDifference(initialStartDate, isRescheduled ? initialRescheduledEndDate : initialEndDate); newStartDate = new Date(initialStartDate); newStartDate.setDate(newStartDate.getDate() + dateOffset); if (isRescheduled) { newRescheduledEndDate = new Date(newStartDate); newRescheduledEndDate.setDate(newRescheduledEndDate.getDate() + duration); updateData = { startDate: newStartDate.toISOString().split('T')[0], rescheduledEndDate: newRescheduledEndDate.toISOString().split('T')[0] }; } else { newEndDate = new Date(newStartDate); newEndDate.setDate(newEndDate.getDate() + duration); updateData = { startDate: newStartDate.toISOString().split('T')[0], endDate: newEndDate.toISOString().split('T')[0] }; } } else if (type === 'resize-end') { if (isRescheduled) { newRescheduledEndDate = new Date(initialRescheduledEndDate); newRescheduledEndDate.setDate(newRescheduledEndDate.getDate() + dateOffset); if (newRescheduledEndDate < new Date(initialStartDate)) newRescheduledEndDate = new Date(initialStartDate); updateData = { rescheduledEndDate: newRescheduledEndDate.toISOString().split('T')[0] }; } else { newEndDate = new Date(initialEndDate); newEndDate.setDate(newEndDate.getDate() + dateOffset); if (newEndDate < new Date(initialStartDate)) newEndDate = new Date(initialStartDate); updateData = { endDate: newEndDate.toISOString().split('T')[0] }; } } else if (type === 'resize-start') { newStartDate = new Date(initialStartDate); newStartDate.setDate(newStartDate.getDate() + dateOffset); const effectiveEndDate = isRescheduled ? new Date(initialRescheduledEndDate) : new Date(initialEndDate); if (newStartDate > effectiveEndDate) newStartDate = effectiveEndDate; updateData = { startDate: newStartDate.toISOString().split('T')[0] }; } else { return; } try { await updateDoc(taskRef, updateData); } catch(error) { console.error("Errore aggiornamento task:", error); } dragInfo.current = {}; };
+    const handleDragStart = (e, task, type) => { e.dataTransfer.effectAllowed = 'move'; dragInfo.current = { taskId: task.id, type, initialX: e.clientX, initialStartDate: task.startDate, initialEndDate: task.endDate, isRescheduled: task.isRescheduled, initialRescheduledEndDate: task.rescheduledEndDate }; };
+
+    const exportData = () => { const dataToExport = { projects, tasks, resources, exportedAt: new Date().toISOString() }; const dataStr = JSON.stringify(dataToExport, null, 2); const blob = new Blob([dataStr], {type: "application/json"}); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `gantt_backup_${new Date().toISOString().split('T')[0]}.json`; document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url); setNotification({message: "Esportazione completata.", type: "success"}); };
+    const handleFileImportChange = (e) => { const file = e.target.files[0]; if (file) { setImportFile(file); setIsImportConfirmOpen(true); } e.target.value = null; };
+    
+    const importData = async () => { if (!importFile || !userId) return; setIsLoading(true); setLoadingMessage("Importazione in corso..."); const reader = new FileReader(); reader.onload = async (e) => { try { const data = JSON.parse(e.target.result); if (!data.projects || !data.tasks || !data.resources) { throw new Error("Formato file non valido."); } setLoadingMessage("Cancellazione dati esistenti..."); const collectionsToDelete = ['tasks', 'resources', 'projects']; for (const coll of collectionsToDelete) { const userCollRef = collection(db, `users/${userId}/${coll}`); const snapshot = await getDocs(userCollRef); const batch = writeBatch(db); snapshot.docs.forEach(d => batch.delete(d.ref)); await batch.commit(); } setLoadingMessage("Importazione nuovi dati..."); const importBatch = writeBatch(db); data.projects.forEach(p => {const {id, ...rest} = p; importBatch.set(doc(collection(db, `users/${userId}/projects`)), rest)}); data.tasks.forEach(t => {const {id, ...rest} = t; importBatch.set(doc(collection(db, `users/${userId}/tasks`)), rest)}); data.resources.forEach(r => {const {id, ...rest} = r; importBatch.set(doc(collection(db, `users/${userId}/resources`)), rest)}); await importBatch.commit(); setNotification({message: "Importazione completata!", type: "success"}); } catch (error) { console.error("Errore importazione:", error); setNotification({message: `Errore importazione: ${error.message}`, type: "error"}); } finally { setIsLoading(false); setImportFile(null); setIsImportConfirmOpen(false); } }; reader.readAsText(importFile); };
+    
+    const exportToPDF = (reportType) => {
+        const { jsPDF } = window.jspdf;
+        if (typeof jsPDF === 'undefined' || (reportType === 'gantt' && typeof window.html2canvas === 'undefined')) {
+            setNotification({ message: "Libreria PDF non caricata. Riprova.", type: "error" });
+            return;
+        }
+
+        setIsLoading(true);
+        setLoadingMessage(`Generazione anteprima ${reportType}...`);
+
+        const convertToHex = (col) => {
+            if (col.startsWith('#')) return col;
+            if (!col || !col.startsWith('rgb') || col === 'rgba(0, 0, 0, 0)') return '#FFFFFF';
+            try {
+                const rgb = col.replace(/[^\d,]/g, '').split(',');
+                const r = parseInt(rgb[0], 10).toString(16).padStart(2, '0');
+                const g = parseInt(rgb[1], 10).toString(16).padStart(2, '0');
+                const b = parseInt(rgb[2], 10).toString(16).padStart(2, '0');
+                return `#${r}${g}${b}`;
+            } catch (e) {
+                return '#FFFFFF';
+            }
+        };
+
+        const commonAutoTableOptions = {
+            didParseCell: function(data) {
+                const raw = data.cell.raw;
+                if (raw && (raw.nodeName === 'TD' || raw.nodeName === 'TH')) {
+                    const computedStyle = window.getComputedStyle(raw);
+                    let bgColor = computedStyle.backgroundColor;
+                    if (bgColor === 'rgba(0, 0, 0, 0)') {
+                        bgColor = '#FFFFFF';
+                    }
+                    data.cell.styles.fillColor = bgColor;
+                    
+                    const hexColor = convertToHex(bgColor);
+                    const contrastingColor = getContrastingTextColor(hexColor);
+                    
+                    data.cell.styles.textColor = computedStyle.color || contrastingColor;
+                    data.cell.styles.halign = raw.style.textAlign || 'left';
+                }
+            }
+        };
+
+        if (reportType === 'gantt') {
+            const ganttElement = ganttContainerRef.current;
+            window.html2canvas(ganttElement, { useCORS: true, scale: 1.5, width: ganttElement.scrollWidth, height: ganttElement.scrollHeight, windowWidth: ganttElement.scrollWidth, windowHeight: ganttElement.scrollHeight })
+            .then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                const doc = new jsPDF('l', 'mm', 'a4');
+                const imgWidth = 280; const pageHeight = 190;
+                const imgHeight = canvas.height * imgWidth / canvas.width;
+                let heightLeft = imgHeight; let position = 10;
+                doc.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+                while (heightLeft > 0) {
+                    position = heightLeft - imgHeight + 10;
+                    doc.addPage();
+                    doc.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+                    heightLeft -= pageHeight;
+                }
+                doc.output('dataurlnewwindow');
+            })
+            .catch((err) => {
+                 console.error("Gantt export error:", err);
+                 setNotification({ message: "Errore durante l'esportazione del Gantt.", type: 'error' });
+            })
+            .finally(() => {
+                 setIsLoading(false);
+            });
+            return;
+        }
+
+        const doc = new jsPDF();
+        try {
+            if (reportType === 'cost' || reportType === 'activity') {
+                const title = reportType === 'cost' ? 'Report Costi' : 'Report Attività';
+                doc.text(title, 14, 15);
+                doc.autoTable({
+                    html: `#${reportType}-report-content table`,
+                    startY: 20,
+                    ...commonAutoTableOptions
+                });
+            } else if (reportType === 'assignment') {
+                const content = document.getElementById('assignment-report-content');
+                doc.text('Report Assegnazioni', 14, 15);
+                let startY = 20;
+                const resourceDivs = content.querySelectorAll(':scope > div');
+                resourceDivs.forEach((div) => {
+                    const h3 = div.querySelector('h3');
+                    const p = div.querySelector('p');
+                    const table = div.querySelector('table');
+                    if (startY > 250) {
+                       doc.addPage();
+                       startY = 15;
+                    }
+                    if (h3) { doc.setFontSize(12).setFont(undefined, 'bold'); doc.text(h3.innerText, 14, startY); startY += 6; }
+                    if (p) { doc.setFontSize(10).setFont(undefined, 'normal'); doc.text(p.innerText, 14, startY); startY += 4; }
+                    if (table) {
+                        doc.autoTable({ html: table, startY: startY, ...commonAutoTableOptions });
+                        startY = doc.autoTable.previous.finalY + 10;
+                    }
+                });
+            }
+            doc.output('dataurlnewwindow');
+        } catch (e) {
+            console.error("PDF export error:", e);
+            setNotification({ message: `Errore durante la creazione del PDF: ${e.message}`, type: 'error' });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+    
+    const handleShowTooltip = (e, content) => { if (!content || content.trim() === '') return; setTooltip({ visible: true, content, x: e.clientX + 10, y: e.clientY + 10 }); };
+    const handleMoveTooltip = (e) => { if (tooltip.visible) { setTooltip(prev => ({ ...prev, x: e.clientX + 10, y: e.clientY + 10 })); }};
+    const handleHideTooltip = () => { setTooltip(prev => ({ ...prev, visible: false })); };
+
+    const handleLogout = async () => {
+        try {
+            await signOut(auth);
+        } catch (error) {
+            console.error("Errore durante il logout:", error);
+            setNotification({message: `Errore logout: ${error.message}`, type: "error"});
+        }
+    };
+
+    const today = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d; }, []);
+    const todayMarkerPosition = useMemo(() => { if (dateHeaders.length === 0) return -1; return calculateDaysDifference(dateHeaders[0], today) * DAY_WIDTH; }, [dateHeaders, today]);
+
+    return (
+        <div className="h-screen w-screen bg-gray-100 flex flex-col font-sans">
+            {isLoading && <Loader message={loadingMessage} />}
+            <Notification message={notification.message} type={notification.type} onClose={() => setNotification({message: ''})} />
+            {tooltip.visible && <div className="fixed bg-gray-800 text-white text-sm rounded-md px-3 py-2 z-50 pointer-events-none max-w-xs whitespace-pre-wrap shadow-lg" style={{ top: `${tooltip.y}px`, left: `${tooltip.x}px` }}>{tooltip.content}</div>}
+            <header className="p-4 border-b flex items-center justify-between bg-white shadow-sm flex-wrap gap-2">
+                <div className="flex items-center gap-4"> <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1> <div className="flex items-center gap-1 rounded-lg bg-gray-200 p-1"> <button onClick={() => setView('gantt')} className={`px-2 py-1 text-sm font-medium rounded-md flex items-center gap-1 ${view==='gantt' ? 'bg-white shadow' : 'text-gray-600'}`}><LayoutDashboard size={16}/> Gantt</button> <button onClick={() => setView('assignmentReport')} className={`px-2 py-1 text-sm font-medium rounded-md flex items-center gap-1 ${view==='assignmentReport' ? 'bg-white shadow' : 'text-gray-600'}`}><ClipboardList size={16}/> Assegnazioni</button> <button onClick={() => setView('activityReport')} className={`px-2 py-1 text-sm font-medium rounded-md flex items-center gap-1 ${view==='activityReport' ? 'bg-white shadow' : 'text-gray-600'}`}><BarChart3 size={16}/> Attività</button> <button onClick={() => setView('costReport')} className={`px-2 py-1 text-sm font-medium rounded-md flex items-center gap-1 ${view==='costReport' ? 'bg-white shadow' : 'text-gray-600'}`}><BarChart3 size={16}/> Costi</button> </div> </div>
+                <div className="flex items-center gap-2 flex-wrap"> <button onClick={exportData} className="bg-gray-600 text-white px-3 py-2 rounded-md hover:bg-gray-700 flex items-center gap-2 text-sm"><FileDown size={16}/> Esporta Dati</button> <button onClick={() => fileInputRef.current.click()} className="bg-gray-600 text-white px-3 py-2 rounded-md hover:bg-gray-700 flex items-center gap-2 text-sm"><FileUp size={16}/> Importa Dati</button> <input type="file" ref={fileInputRef} onChange={handleFileImportChange} accept=".json" className="hidden"/> <button onClick={handleOpenNewProjectModal} className="bg-purple-600 text-white px-3 py-2 rounded-md hover:bg-purple-700 flex items-center gap-2 text-sm"> <Plus size={16} /> Progetto </button> <button onClick={() => setIsResourceModalOpen(true)} className="bg-yellow-500 text-white px-3 py-2 rounded-md hover:bg-yellow-600 flex items-center gap-2 text-sm"> <Users size={16} /> Risorse </button> <button onClick={() => { setEditingTask(null); setIsTaskModalOpen(true); }} className="bg-blue-500 text-white px-3 py-2 rounded-md hover:bg-blue-600 flex items-center gap-2 text-sm"> <Plus size={16} /> Attività </button> <button onClick={handleLogout} className="bg-red-500 text-white px-3 py-2 rounded-md hover:bg-red-600 flex items-center gap-2 text-sm"> <LogOut size={16} /> Logout </button> </div>
+            </header>
+            <main className="flex-grow overflow-auto">
+                {view === 'gantt' ? (
+                    <div className="h-full w-full overflow-auto" ref={ganttContainerRef} onDrop={handleGanttDrop} onDragOver={e => e.preventDefault()}>
+                        <div className="grid" style={{ gridTemplateColumns: `${SIDEBAR_WIDTH}px 1fr`, width: `${SIDEBAR_WIDTH + dateHeaders.length * DAY_WIDTH}px` }}>
+                            {/* Colonna Sinistra (Sidebar) */}
+                            <div className="sticky left-0 z-20 bg-gray-50">
+                                <div className="sticky top-0 z-10 flex items-center justify-between h-12 px-4 border-b border-r bg-gray-100"><span className="font-semibold text-gray-700">Progetti</span><button onClick={() => exportToPDF('gantt')} className="text-blue-600 hover:text-blue-800 p-1"><FileDown size={18}/></button></div>
+                                {projectsWithData.map(project => (
+                                    <div key={project.id} className="group/project">
+                                        <div onClick={() => setSelectedProjectId(project.id)} className={`flex items-center justify-between p-2 px-4 cursor-pointer transition-all border-b border-r ${selectedProjectId === project.id ? 'bg-blue-200 border-l-4 border-blue-600' : 'bg-white'}`} style={{height: `${PROJECT_HEADER_HEIGHT}px`}}>
+                                            <div className="flex items-center gap-3 flex-grow overflow-hidden"><span className="w-4 h-4 rounded-full flex-shrink-0" style={{backgroundColor: project.color}}></span> <div className="flex-grow overflow-hidden"><h3 className="font-bold text-gray-800 truncate">{project.name}</h3> <div className="w-full bg-gray-300 rounded-full h-1.5 mt-1"><div className="bg-green-500 h-1.5 rounded-full" style={{width: `${project.projectCompletionPercentage.toFixed(0)}%`}}></div></div><span className="text-xs text-gray-500">Compl: {project.projectCompletionPercentage.toFixed(1)}%</span> {project.budget > 0 && (<span className={`text-xs ml-2 ${project.budgetUsagePercentage > 100 ? 'text-red-600 font-bold' : 'text-gray-500'}`}>Budget: {project.budgetUsagePercentage.toFixed(1)}%</span>)}</div></div><div className="flex items-center gap-2 flex-shrink-0 opacity-0 group-hover/project:opacity-100 transition-opacity"><button onClick={(e) => {e.stopPropagation(); handleEditProject(project)}} className="p-1 text-gray-500 hover:text-blue-600"><Edit size={16}/></button><button onClick={(e) => {e.stopPropagation(); confirmDeleteItem(project, 'project')}} className="p-1 text-gray-500 hover:text-red-600"><Trash2 size={16}/></button></div>
+                                        </div>
+                                        {project.tasks.map(task => (
+                                            <div key={task.id} className="flex items-center group/task p-2 pl-9 border-b border-r bg-gray-50" style={{height: `${ROW_HEIGHT}px`}} onDoubleClick={() => handleEditTask(task)}>
+                                                <div className="flex-grow overflow-hidden"><p className="font-medium text-gray-900 truncate">{task.name}</p><div className="flex flex-wrap gap-1 mt-1">{task.assigned?.map(r => <span key={r.id} className="text-xs bg-gray-200 text-gray-800 px-1.5 py-0.5 rounded-full">{r.name}</span>)}</div></div>
+                                                <div className="flex items-center opacity-0 group-hover/task:opacity-100 transition-opacity"><button onClick={(e) => {e.stopPropagation(); handleEditTask(task)}} className="p-1 text-gray-500 hover:text-blue-600"><Edit size={16}/></button><button onClick={(e) => {e.stopPropagation(); confirmDeleteItem(task, 'task')}} className="p-1 text-gray-500 hover:text-red-600"><Trash2 size={16}/></button></div>
+                                            </div>
+                                        ))} 
+                                        {project.tasks.length === 0 && <div className="pl-9 text-xs text-gray-500 italic h-full flex items-center border-b border-r" style={{height: `${ROW_HEIGHT}px`}}>Nessuna attività.</div>}
+                                    </div>
+                                ))}
+                            </div>
+                            {/* Colonna Destra (Timeline) */}
+                            <div className="relative">
+                                <div className="sticky top-0 z-10 flex h-12 bg-white border-b">{dateHeaders.map((date) => { const isToday = date.toDateString() === today.toDateString(); return (<div key={date.toISOString()} className={`w-10 text-center border-r flex-shrink-0 flex flex-col justify-center ${isToday ? 'bg-red-200' : 'bg-gray-50'}`}><div className={`text-xs ${date.getDay() === 0 || date.getDay() === 6 ? 'text-red-500' : 'text-gray-500'}`}>{['D', 'L', 'M', 'M', 'G', 'V', 'S'][date.getDay()]}</div><div className={`text-sm font-semibold ${isToday ? 'text-red-600' : 'text-gray-800'}`}>{date.getDate()}</div></div>)})}</div>
+                                <div className="relative" style={{height: `${ganttHeight}px`}}>
+                                    <div className="absolute top-0 left-0 h-full w-0.5 bg-red-500 opacity-75 z-20" style={{ transform: `translateX(${todayMarkerPosition}px)`}}></div>
+                                    {projectsWithData.map(project => project.tasks.map(task => { 
+                                        const pos = taskPositions.get(task.id); 
+                                        if(!pos) return null; 
+                                        
+                                        const isPlaceholderVisible = task.isRescheduled && typeof pos.originalLeft === 'number';
+
+                                        return (
+                                            <div key={task.id} className="absolute" style={{ top: `${pos.top}px`, height: `${ROW_HEIGHT}px`, left: '0px', width: '100%', pointerEvents: 'none' }}>
+
+                                                {/* Main task bar */}
+                                                <div className="absolute flex items-center" style={{ top: `0px`, height: `${ROW_HEIGHT}px`, left: `${pos.left}px`, width: `${pos.width}px`, pointerEvents: 'auto', zIndex: 10 }}>
+                                                    <div draggable onDragStart={(e) => handleDragStart(e, task, 'move')} onDoubleClick={() => handleEditTask(task)} onMouseEnter={(e) => handleShowTooltip(e, task.notes)} onMouseMove={handleMoveTooltip} onMouseLeave={handleHideTooltip} className={`h-8 rounded-md shadow-sm flex items-center w-full group relative cursor-move box-border ${task.isRescheduled ? 'border-2 border-yellow-500' : ''}`} style={{ backgroundColor: task.taskColor || project.color || '#3b82f6' }}>
+                                                        <div className="absolute top-0 left-0 h-full rounded-l-md" style={{width: `${task.completionPercentage || 0}%`, backgroundColor: 'rgba(0,0,0,0.2)'}}></div>
+                                                        <div className="relative z-10 flex items-center justify-between w-full px-2">
+                                                            <span className={`text-sm truncate font-medium ${getContrastingTextColor(task.taskColor || project.color)}`}>{task.name}</span>
+                                                            {task.notes && task.notes.trim() !== '' && ( <StickyNote size={16} className={`flex-shrink-0 ${getContrastingTextColor(task.taskColor || project.color)}`} aria-label="Questa attività ha una nota" /> )}
+                                                        </div>
+                                                        <div draggable onDragStart={(e) => { e.stopPropagation(); handleDragStart(e, task, 'resize-start'); }} className="absolute left-0 top-0 w-2 h-full cursor-ew-resize z-20" />
+                                                        <div draggable onDragStart={(e) => { e.stopPropagation(); handleDragStart(e, task, 'resize-end'); }} className="absolute right-0 top-0 w-2 h-full cursor-ew-resize z-20" />
+                                                    </div>
+                                                </div>
+
+                                                {/* Placeholder for original position */}
+                                                {isPlaceholderVisible && (
+                                                    <div
+                                                        title={`Pianificazione originale: ${new Date(task.originalStartDate).toLocaleDateString()} - ${new Date(task.originalEndDate).toLocaleDateString()}`}
+                                                        className="absolute h-8 rounded-md bg-gray-300 border border-dashed border-gray-500 opacity-80"
+                                                        style={{
+                                                            top: '16px',
+                                                            left: `${pos.originalLeft}px`,
+                                                            width: `${pos.originalWidth}px`,
+                                                            zIndex: 20
+                                                        }}
+                                                    />
+                                                )}
+
+                                                {/* Line indicator for the shift */}
+                                                {isPlaceholderVisible && (() => {
+                                                    const dayDiff = calculateDaysDifference(new Date(task.originalStartDate), new Date(task.startDate));
+                                                    const isForward = dayDiff > 0;
+                                                    const lineStart = isForward ? pos.originalLeft + pos.originalWidth : pos.left + pos.width;
+                                                    const lineEnd = isForward ? pos.left : pos.originalLeft;
+                                                    const lineWidth = Math.max(0, lineEnd - lineStart);
+
+                                                    if (lineWidth <= 0) return null;
+
+                                                    return (
+                                                        <div
+                                                            className="absolute top-1/2 -translate-y-1/2 h-px border-t border-dashed border-yellow-600"
+                                                            style={{
+                                                                left: `${lineStart}px`,
+                                                                width: `${lineWidth}px`,
+                                                                zIndex: 15
+                                                            }}
+                                                            title={`Spostato di ${dayDiff} giorni`}
+                                                        >
+                                                            <div
+                                                                className="absolute top-1/2 -translate-y-1/2 w-2 h-2 bg-yellow-600"
+                                                                style={{
+                                                                    right: isForward ? '-4px' : 'auto',
+                                                                    left: !isForward ? '-4px' : 'auto',
+                                                                    clipPath: isForward ? 'polygon(0% 0%, 100% 50%, 0% 100%)' : 'polygon(100% 0%, 0% 50%, 100% 100%)'
+                                                                }}
+                                                            ></div>
+                                                        </div>
+                                                    );
+                                                })()}
+                                            </div>
+                                        );
+                                    }))}
                                     <svg width="100%" height="100%" className="absolute top-0 left-0 z-10 pointer-events-none">
                                       <defs> <marker id="arrowhead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"> <path d="M 0 0 L 10 5 L 0 10 z" fill="#0ea5e9" /> </marker> </defs>
                                       {arrowPaths.map(path => (<path key={path.id} d={path.d} stroke="#0ea5e9" strokeWidth="2" fill="none" markerEnd="url(#arrowhead)" />))}
