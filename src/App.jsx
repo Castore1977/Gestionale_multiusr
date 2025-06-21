@@ -141,15 +141,12 @@ const TaskForm = ({ db, projects, task, resources, allTasks, onDone, selectedPro
     const [assignedResources, setAssignedResources] = useState(task ? task.assignedResources || [] : []);
     const [dependencies, setDependencies] = useState(task ? task.dependencies || [] : []);
     const [notes, setNotes] = useState(task ? task.notes || '' : '');
-    
-    // NUOVI STATI PER LA RIPIANIFICAZIONE
     const [isRescheduled, setIsRescheduled] = useState(task ? task.isRescheduled || false : false);
     const [rescheduledEndDate, setRescheduledEndDate] = useState(task ? task.rescheduledEndDate || '' : '');
 
 
     useEffect(() => { if (!task) { setTaskColor(getProjectColor(projectId)); } }, [projectId, task, getProjectColor]);
     
-    // Calcola l'avviso per la data di fine effettiva (originale o ripianificata)
     useEffect(() => {
         const effectiveEndDate = isRescheduled && rescheduledEndDate ? rescheduledEndDate : endDate;
         setDateWarning(checkDateWarning(effectiveEndDate));
@@ -159,23 +156,19 @@ const TaskForm = ({ db, projects, task, resources, allTasks, onDone, selectedPro
     const handleDurationChange = (value) => { const newDur = parseInt(value, 10); if (newDur > 0) { setDuration(newDur); const newEndDate = new Date(startDate); newEndDate.setDate(newEndDate.getDate() + newDur - 1); setEndDate(newEndDate.toISOString().split('T')[0]); } };
     const handleEndDateChange = (date) => { setEndDate(date); const newDuration = calculateDaysDifference(startDate, date) + 1; if (newDuration > 0) { setDuration(newDuration); } };
     
-    // Applica il vincolo Finish-to-Finish anche durante la modifica nel form
     useEffect(() => {
         if (dependencies?.length > 0 && allTasks.length > 0) {
             const maxPredecessorEndDate = dependencies.reduce((latest, depId) => {
                 const predecessor = allTasks.find(t => t.id === depId);
                 if (!predecessor) return latest;
-                // Usa la data di fine ripianificata del predecessore se esiste
                 const predecessorEndDate = predecessor.isRescheduled && predecessor.rescheduledEndDate ? new Date(predecessor.rescheduledEndDate) : new Date(predecessor.endDate);
                 return predecessorEndDate > latest ? predecessorEndDate : latest;
             }, new Date(0));
 
             if (maxPredecessorEndDate > new Date(0)) {
-                // Controlla la data di fine effettiva dell'attività corrente
                 const currentEffectiveEndDate = isRescheduled && rescheduledEndDate ? new Date(rescheduledEndDate) : new Date(endDate);
                 if (currentEffectiveEndDate < maxPredecessorEndDate) {
                     const newEndDate = new Date(maxPredecessorEndDate);
-                    // Se ripianificata, aggiorna la data ripianificata, altrimenti quella standard
                     if(isRescheduled) {
                         setRescheduledEndDate(newEndDate.toISOString().split('T')[0]);
                     } else {
@@ -189,7 +182,42 @@ const TaskForm = ({ db, projects, task, resources, allTasks, onDone, selectedPro
         }
     }, [dependencies, allTasks, endDate, rescheduledEndDate, isRescheduled, duration]);
 
-    const handleSubmit = async (e) => { e.preventDefault(); if (!userId) return; const taskData = { name, startDate, endDate, completionPercentage: Number(completionPercentage), dailyHours: Number(dailyHours), taskColor, assignedResources, dependencies, projectId, notes, isRescheduled, rescheduledEndDate: isRescheduled ? rescheduledEndDate : '' }; try { if (task) { await updateDoc(doc(db, `users/${userId}/tasks`, task.id), taskData); } else { await addDoc(collection(db, `users/${userId}/tasks`), { ...taskData, order: allTasks.filter(t => t.projectId === projectId).length }); } onDone(); } catch (error) { console.error("Errore salvataggio task:", error); } };
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!userId) return;
+        const taskData = {
+            name,
+            startDate,
+            endDate,
+            completionPercentage: Number(completionPercentage),
+            dailyHours: Number(dailyHours),
+            taskColor,
+            assignedResources,
+            dependencies,
+            projectId,
+            notes,
+            isRescheduled,
+            rescheduledEndDate: isRescheduled ? rescheduledEndDate : ''
+        };
+        try {
+            if (task) {
+                // Durante l'aggiornamento, non modifichiamo le date originali
+                await updateDoc(doc(db, `users/${userId}/tasks`, task.id), taskData);
+            } else {
+                // Durante la creazione, impostiamo le date originali per la prima volta
+                await addDoc(collection(db, `users/${userId}/tasks`), {
+                    ...taskData,
+                    originalStartDate: startDate, // Salva la data di inizio originale
+                    originalEndDate: endDate,     // Salva la data di fine originale
+                    order: allTasks.filter(t => t.projectId === projectId).length
+                });
+            }
+            onDone();
+        } catch (error) {
+            console.error("Errore salvataggio task:", error);
+        }
+    };
+
     const handleResourceToggle = (resourceId) => setAssignedResources(prev => prev.includes(resourceId) ? prev.filter(id => id !== resourceId) : [...prev, resourceId]);
     const handleDependencyToggle = (taskId) => setDependencies(prev => prev.includes(taskId) ? prev.filter(id => id !== taskId) : [...prev, taskId]);
 
@@ -451,14 +479,19 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
                 projectSpentCost += spentCost;
                 projectTotalHours += totalTaskHours;
                 projectWorkedHours += workedHours;
+
+                // Calcola la posizione e le dimensioni della barra "fantasma" usando le date originali
+                const originalStartDateForCalc = new Date(task.originalStartDate || task.startDate);
+                const originalEndDateForCalc = new Date(task.originalEndDate || task.endDate);
+                const originalDuration = calculateDaysDifference(originalStartDateForCalc, originalEndDateForCalc) + 1;
                 
                 positions.set(task.id, {
                     top: currentY,
                     left: calculateDaysDifference(dateHeaders[0], task.startDate) * DAY_WIDTH,
                     width: (duration > 0 ? duration : 1) * DAY_WIDTH,
                     isRescheduled: task.isRescheduled,
-                    originalLeft: calculateDaysDifference(dateHeaders[0], new Date(task.originalStartDate || task.startDate)) * DAY_WIDTH,
-                    originalWidth: (calculateDaysDifference(new Date(task.originalStartDate || task.startDate), task.endDate) + 1) * DAY_WIDTH
+                    originalLeft: calculateDaysDifference(dateHeaders[0], originalStartDateForCalc) * DAY_WIDTH,
+                    originalWidth: (originalDuration > 0 ? originalDuration : 1) * DAY_WIDTH
                 });
                 
                 currentY += ROW_HEIGHT;
