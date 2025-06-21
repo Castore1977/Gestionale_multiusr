@@ -6,10 +6,18 @@ import { ArrowRight, Plus, Users, Trash2, Edit, LayoutDashboard, BarChart3, X, A
 
 
 // --- CONFIGURAZIONE FIREBASE ---
-// La configurazione di Firebase verrà iniettata automaticamente nell'ambiente di esecuzione.
-// Non è necessario modificare questa sezione.
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+const firebaseConfigString = import.meta.env.VITE_FIREBASE_CONFIG;
+const firebaseConfig = firebaseConfigString ? JSON.parse(firebaseConfigString) : {
+// INCOLLA QUI LA TUA CONFIGURAZIONE FIREBASE
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    appId: import.meta.env.VITE_FIREBASE_APP_ID,
+    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
+};
+
 
 
 // --- FUNZIONI UTILI (Invariate) ---
