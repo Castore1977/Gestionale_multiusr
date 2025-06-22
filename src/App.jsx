@@ -799,6 +799,45 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
         setIsLoading(true);
         setLoadingMessage(`Generazione anteprima ${reportType}...`);
 
+        if (reportType === 'gantt') {
+            const ganttElement = ganttContainerRef.current;
+            window.html2canvas(ganttElement, { 
+                backgroundColor: '#ffffff',
+                useCORS: true, 
+                scale: 1.5, 
+                width: ganttElement.scrollWidth, 
+                height: ganttElement.scrollHeight, 
+                windowWidth: ganttElement.scrollWidth, 
+                windowHeight: ganttElement.scrollHeight 
+            })
+            .then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                const doc = new jsPDF('l', 'mm', 'a4');
+                const imgWidth = 280; 
+                const pageHeight = 190;
+                const imgHeight = canvas.height * imgWidth / canvas.width;
+                let heightLeft = imgHeight; 
+                let position = 10;
+                doc.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+                while (heightLeft > 0) {
+                    position = heightLeft - imgHeight + 10;
+                    doc.addPage();
+                    doc.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+                    heightLeft -= pageHeight;
+                }
+                doc.output('dataurlnewwindow');
+            })
+            .catch((err) => {
+                 console.error("Gantt export error:", err);
+                 setNotification({ message: "Errore durante l'esportazione del Gantt.", type: 'error' });
+            })
+            .finally(() => {
+                 setIsLoading(false);
+            });
+            return;
+        }
+        
         const convertToHex = (col) => {
             if (col.startsWith('#')) return col;
             if (!col || !col.startsWith('rgb') || col === 'rgba(0, 0, 0, 0)') return '#FFFFFF';
@@ -832,35 +871,6 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
                 }
             }
         };
-
-        if (reportType === 'gantt') {
-            const ganttElement = ganttContainerRef.current;
-            window.html2canvas(ganttElement, { useCORS: true, scale: 1.5, width: ganttElement.scrollWidth, height: ganttElement.scrollHeight, windowWidth: ganttElement.scrollWidth, windowHeight: ganttElement.scrollHeight })
-            .then(canvas => {
-                const imgData = canvas.toDataURL('image/png');
-                const doc = new jsPDF('l', 'mm', 'a4');
-                const imgWidth = 280; const pageHeight = 190;
-                const imgHeight = canvas.height * imgWidth / canvas.width;
-                let heightLeft = imgHeight; let position = 10;
-                doc.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
-                heightLeft -= pageHeight;
-                while (heightLeft > 0) {
-                    position = heightLeft - imgHeight + 10;
-                    doc.addPage();
-                    doc.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
-                    heightLeft -= pageHeight;
-                }
-                doc.output('dataurlnewwindow');
-            })
-            .catch((err) => {
-                 console.error("Gantt export error:", err);
-                 setNotification({ message: "Errore durante l'esportazione del Gantt.", type: 'error' });
-            })
-            .finally(() => {
-                 setIsLoading(false);
-            });
-            return;
-        }
 
         const doc = new jsPDF();
         try {
