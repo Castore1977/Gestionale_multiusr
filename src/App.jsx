@@ -17,7 +17,6 @@ const firebaseConfig = firebaseConfigString ? JSON.parse(firebaseConfigString) :
     measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
-
 // --- FUNZIONI UTILI ---
 const calculateDaysDifference = (d1, d2) => {
     if (!d1 || !d2) return 0;
@@ -790,14 +789,13 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
     
     const importData = async () => { if (!importFile || !userId) return; setIsLoading(true); setLoadingMessage("Importazione in corso..."); const reader = new FileReader(); reader.onload = async (e) => { try { const data = JSON.parse(e.target.result); if (!data.projects || !data.tasks || !data.resources) { throw new Error("Formato file non valido."); } setLoadingMessage("Cancellazione dati esistenti..."); const collectionsToDelete = ['tasks', 'resources', 'projects']; for (const coll of collectionsToDelete) { const userCollRef = collection(db, `users/${userId}/${coll}`); const snapshot = await getDocs(userCollRef); const batch = writeBatch(db); snapshot.docs.forEach(d => batch.delete(d.ref)); await batch.commit(); } setLoadingMessage("Importazione nuovi dati..."); const importBatch = writeBatch(db); data.projects.forEach(p => {const {id, ...rest} = p; importBatch.set(doc(collection(db, `users/${userId}/projects`)), rest)}); data.tasks.forEach(t => {const {id, ...rest} = t; importBatch.set(doc(collection(db, `users/${userId}/tasks`)), rest)}); data.resources.forEach(r => {const {id, ...rest} = r; importBatch.set(doc(collection(db, `users/${userId}/resources`)), rest)}); await importBatch.commit(); setNotification({message: "Importazione completata!", type: "success"}); } catch (error) { console.error("Errore importazione:", error); setNotification({message: `Errore importazione: ${error.message}`, type: "error"}); } finally { setIsLoading(false); setImportFile(null); setIsImportConfirmOpen(false); } }; reader.readAsText(importFile); };
     
-    const exportToPDF = (reportType) => {
+    const exportToFile = (reportType) => {
         const { jsPDF } = window.jspdf;
         if (typeof jsPDF === 'undefined' || (reportType === 'gantt' && typeof window.html2canvas === 'undefined')) {
-            setNotification({ message: "Libreria PDF non caricata. Riprova.", type: "error" });
+            setNotification({ message: "Libreria di esportazione non caricata. Riprova.", type: "error" });
             return;
         }
 
-        // --- INIZIO CODICE CORRETTO PER ESPORTAZIONE ---
         if (reportType === 'gantt') {
             const ganttElement = ganttContainerRef.current;
             if (!ganttElement) {
@@ -806,70 +804,57 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
             }
 
             setIsLoading(true);
-            setLoadingMessage(`Generazione PDF Gantt...`);
+            setLoadingMessage(`Generazione Immagine Gantt...`);
 
-            // Disabilita temporaneamente il posizionamento "sticky" che interferisce con html2canvas
             const stickyElements = ganttElement.querySelectorAll('.sticky');
             const originalPositions = new Map();
             stickyElements.forEach(el => {
                 originalPositions.set(el, el.style.position);
-                el.style.position = 'relative'; // Imposta su relative per la cattura
+                el.style.position = 'relative'; 
             });
 
-            // Aggiunge un breve ritardo per consentire al DOM di aggiornarsi
             setTimeout(() => {
                 const captureOptions = {
                     backgroundColor: '#ffffff',
                     useCORS: true,
-                    scale: 1.5,
+                    scale: 2, // Aumenta la scala per una risoluzione migliore
                     width: ganttElement.scrollWidth,
                     height: ganttElement.scrollHeight,
-                    scrollX: -ganttElement.scrollLeft,
-                    scrollY: -ganttElement.scrollTop,
                 };
 
                 window.html2canvas(ganttElement, captureOptions)
                     .then(canvas => {
                         if (canvas.width === 0 || canvas.height === 0) {
                             setNotification({ message: "La cattura del Gantt ha prodotto un'immagine vuota. Riprova.", type: 'error' });
-                            return; // Esce se la canvas è vuota
+                            return;
                         }
-                        const imgData = canvas.toDataURL('image/png');
-                        const doc = new jsPDF('l', 'mm', 'a4');
-                        const imgWidth = 280;
-                        const pageHeight = 190;
-                        const imgHeight = canvas.height * imgWidth / canvas.width;
-                        let heightLeft = imgHeight;
-                        let position = 10;
+                        
+                        // Creazione del link per il download del JPEG
+                        const imgData = canvas.toDataURL('image/jpeg', 0.95); // Qualità 95%
+                        const link = document.createElement('a');
+                        link.href = imgData;
+                        link.download = 'gantt-chart.jpeg';
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        setNotification({ message: 'Esportazione JPEG completata.', type: 'success' });
 
-                        doc.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
-                        heightLeft -= pageHeight;
-
-                        while (heightLeft > 0) {
-                            position = -heightLeft + 10;
-                            doc.addPage();
-                            doc.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
-                            heightLeft -= pageHeight;
-                        }
-                        doc.output('dataurlnewwindow');
                     })
                     .catch((err) => {
                         console.error("Gantt export error:", err);
                         setNotification({ message: "Errore durante l'esportazione del Gantt.", type: 'error' });
                     })
                     .finally(() => {
-                        // Ripristina il posizionamento "sticky" originale
                         stickyElements.forEach(el => {
                             el.style.position = originalPositions.get(el) || '';
                         });
                         setIsLoading(false);
                     });
-            }, 250); // Ritardo di 250ms
+            }, 250);
             return;
         }
-        // --- FINE CODICE CORRETTO PER ESPORTAZIONE ---
         
-        // Logica per altri report (invariata)
+        // Logica per i report PDF (invariata)
         setIsLoading(true);
         setLoadingMessage(`Generazione PDF ${reportType}...`);
         const convertToHex = (col) => {
@@ -934,7 +919,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
                     const p = div.querySelector('p');
                     const table = div.querySelector('table');
 
-                    if (index > 0 && startY + 60 > doc.internal.pageSize.height) { // Check space before adding content
+                    if (index > 0 && startY + 60 > doc.internal.pageSize.height) { 
                        doc.addPage();
                        startY = 15;
                     }
@@ -997,7 +982,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
                         <div className="grid" style={{ gridTemplateColumns: `${SIDEBAR_WIDTH}px 1fr`, width: `${SIDEBAR_WIDTH + dateHeaders.length * DAY_WIDTH}px` }}>
                             {/* Colonna Sinistra (Sidebar) */}
                             <div className="sticky left-0 z-20 bg-gray-50">
-                                <div className="sticky top-0 z-10 flex items-center justify-between h-12 px-4 border-b border-r bg-gray-100"><span className="font-semibold text-gray-700">Progetti</span><button onClick={() => exportToPDF('gantt')} className="text-blue-600 hover:text-blue-800 p-1"><FileDown size={18}/></button></div>
+                                <div className="sticky top-0 z-10 flex items-center justify-between h-12 px-4 border-b border-r bg-gray-100"><span className="font-semibold text-gray-700">Progetti</span><button onClick={() => exportToFile('gantt')} className="text-blue-600 hover:text-blue-800 p-1"><FileDown size={18}/></button></div>
                                 {projectsWithData.map(project => (
                                     <div key={project.id} className="group/project">
                                         <div onClick={() => setSelectedProjectId(project.id)} className={`flex items-center justify-between p-2 px-4 cursor-pointer transition-all border-b border-r ${selectedProjectId === project.id ? 'bg-blue-200 border-l-4 border-blue-600' : 'bg-white'}`} style={{height: `${PROJECT_HEADER_HEIGHT}px`}}>
@@ -1096,9 +1081,9 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
                             </div>
                         </div>
                     </div>
-                ) : view === 'costReport' ? ( <CostReportView projectsWithData={projectsWithData} onExportPDF={() => exportToPDF('cost')} />
-                ) : view === 'assignmentReport' ? ( <AssignmentReportView projectsWithData={projectsWithData} resources={resources} onExportPDF={() => exportToPDF('assignment')} /> )
-                : ( <ActivityReportView projectsWithData={projectsWithData} onExportPDF={() => exportToPDF('activity')} /> )
+                ) : view === 'costReport' ? ( <CostReportView projectsWithData={projectsWithData} onExportPDF={() => exportToFile('cost')} />
+                ) : view === 'assignmentReport' ? ( <AssignmentReportView projectsWithData={projectsWithData} resources={resources} onExportPDF={() => exportToFile('assignment')} /> )
+                : ( <ActivityReportView projectsWithData={projectsWithData} onExportPDF={() => exportToFile('activity')} /> )
                 }
             </main>
              <Modal isOpen={isTaskModalOpen} onClose={() => {setEditingTask(null); setIsTaskModalOpen(false);}} title={editingTask ? 'Modifica Attività' : 'Nuova Attività'}> <TaskForm db={db} userId={userId} projects={projects} task={editingTask} resources={resources} allTasks={tasks} onDone={() => {setEditingTask(null); setIsTaskModalOpen(false);}} selectedProjectIdForNew={selectedProjectId} /> </Modal>
