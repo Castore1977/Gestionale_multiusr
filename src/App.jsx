@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, signInAnonymously } from 'firebase/auth';
+import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { getFirestore, collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, setDoc, query, where, writeBatch, getDocs } from 'firebase/firestore';
-import { ArrowRight, Plus, Users, Trash2, Edit, LayoutDashboard, BarChart3, X, AlertTriangle, FileDown, FileUp, CheckCircle, ClipboardList, StickyNote, LogOut, Percent } from 'lucide-react';
+import { ArrowRight, Plus, Users, Trash2, Edit, LayoutDashboard, BarChart3, X, AlertTriangle, FileDown, FileUp, CheckCircle, ClipboardList, StickyNote, LogOut, Percent, Archive, ArchiveRestore } from 'lucide-react';
 
 // --- CONFIGURAZIONE FIREBASE ---
 const firebaseConfigString = import.meta.env.VITE_FIREBASE_CONFIG;
@@ -70,6 +70,15 @@ const Loader = ({ message }) => (
 );
 
 const Notification = ({ message, onClose, type = 'info' }) => {
+    useEffect(() => {
+        if (message) {
+            const timer = setTimeout(() => {
+                onClose();
+            }, 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [message, onClose]);
+
     if (!message) return null;
     const colors = { info: 'bg-blue-500', success: 'bg-green-500', error: 'bg-red-500' };
     return ( <div className={`fixed top-5 right-5 text-white py-2 px-4 rounded-lg shadow-lg z-50 animate-fade-in-down ${colors[type]}`}> <span>{message}</span> <button onClick={onClose} className="ml-4 font-bold">X</button> </div> );
@@ -89,8 +98,8 @@ const Modal = ({ children, isOpen, onClose, title }) => {
 
 const DatePicker = ({ value, onChange, ...props }) => {
  const formatDate = (date) => {
-   if (!date) return '';
-   try { const d = new Date(date); const year = d.getFullYear(); const month = (d.getMonth() + 1).toString().padStart(2, '0'); const day = d.getDate().toString().padStart(2, '0'); return `${year}-${month}-${day}`; } catch(e) { return ''; }
+    if (!date) return '';
+    try { const d = new Date(date); const year = d.getFullYear(); const month = (d.getMonth() + 1).toString().padStart(2, '0'); const day = d.getDate().toString().padStart(2, '0'); return `${year}-${month}-${day}`; } catch(e) { return ''; }
  };
  return ( <input type="date" value={formatDate(value)} onChange={(e) => onChange(e.target.value)} className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm" {...props} /> );
 };
@@ -136,7 +145,11 @@ const ProjectForm = ({ project, onDone, db, userId }) => {
             if (project && project.id) {
                 await updateDoc(doc(db, `users/${userId}/projects`, project.id), projectData);
             } else {
-                await addDoc(collection(db, `users/${userId}/projects`), { ...projectData, createdAt: new Date().toISOString() });
+                await addDoc(collection(db, `users/${userId}/projects`), { 
+                    ...projectData, 
+                    createdAt: new Date().toISOString(),
+                    isArchived: false // Imposta come non archiviato alla creazione
+                });
             }
             onDone();
         } catch (error) {
@@ -173,6 +186,7 @@ const ProjectForm = ({ project, onDone, db, userId }) => {
 };
 
 const TaskForm = ({ db, projects, task, resources, allTasks, onDone, selectedProjectIdForNew, userId }) => {
+    // projects here should only be active projects
     const getProjectColor = useCallback((pId) => projects.find(p => p.id === pId)?.color || '#3b82f6', [projects]);
     
     const [name, setName] = useState(task ? task.name : '');
@@ -611,12 +625,17 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
     const [itemToDelete, setItemToDelete] = useState(null);
     const ganttContainerRef = useRef(null);
     const [tooltip, setTooltip] = useState({ visible: false, content: '', x: 0, y: 0 });
+    const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
+
+    const activeProjects = useMemo(() => projects.filter(p => !p.isArchived), [projects]);
+    const archivedProjects = useMemo(() => projects.filter(p => p.isArchived), [projects]);
     
     const ROW_HEIGHT = 64; const DAY_WIDTH = 40; const PROJECT_HEADER_HEIGHT = 64; const SIDEBAR_WIDTH = 384;
 
     const { overallStartDate, totalDays } = useMemo(() => { 
-        if (tasks.length === 0) return { overallStartDate: new Date(), totalDays: 30 };
-        const allDates = tasks.flatMap(t => [new Date(t.startDate), new Date(t.endDate), t.isRescheduled && t.rescheduledEndDate ? new Date(t.rescheduledEndDate) : null]).filter(d => d && !isNaN(d));
+        const activeTasks = tasks.filter(task => activeProjects.some(p => p.id === task.projectId));
+        if (activeTasks.length === 0) return { overallStartDate: new Date(), totalDays: 30 };
+        const allDates = activeTasks.flatMap(t => [new Date(t.startDate), new Date(t.endDate), t.isRescheduled && t.rescheduledEndDate ? new Date(t.rescheduledEndDate) : null]).filter(d => d && !isNaN(d));
         if (allDates.length === 0) return { overallStartDate: new Date(), totalDays: 30 };
         
         const minDate = new Date(Math.min(...allDates)); 
@@ -624,15 +643,16 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
         if (isNaN(minDate) || isNaN(maxDate)) return { overallStartDate: new Date(), totalDays: 30 };
         const diff = calculateDaysDifference(minDate, maxDate) + 5; 
         return { overallStartDate: minDate, totalDays: diff > 30 ? diff : 30 };
-    }, [tasks]);
+    }, [tasks, activeProjects]);
 
     const dateHeaders = useMemo(() => { const headers = []; let currentDate = new Date(overallStartDate); currentDate.setDate(currentDate.getDate() - 1); for (let i = 0; i < totalDays + 2; i++) { headers.push(new Date(currentDate)); currentDate.setDate(currentDate.getDate() + 1); } return headers; }, [overallStartDate, totalDays]);
     
     const { projectsWithData, taskPositions, ganttHeight } = useMemo(() => {
-        if (!projects || !tasks || !resources || dateHeaders.length === 0) return { projectsWithData: [], taskPositions: new Map(), ganttHeight: 0 };
+        const activeTasks = tasks.filter(task => activeProjects.some(p => p.id === task.projectId));
+        if (!activeProjects || !activeTasks || !resources || dateHeaders.length === 0) return { projectsWithData: [], taskPositions: new Map(), ganttHeight: 0 };
         
         const taskMap = {};
-        tasks.forEach(task => {
+        activeTasks.forEach(task => {
             const startDate = new Date(task.startDate);
             const endDate = new Date(task.endDate);
             const rescheduledEndDate = (task.isRescheduled && task.rescheduledEndDate) ? new Date(task.rescheduledEndDate) : null;
@@ -641,8 +661,8 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
             taskMap[task.id] = { ...task, startDate, endDate, rescheduledEndDate, effectiveEndDate, duration: duration > 0 ? duration : 1 };
         });
 
-        for (let i = 0; i < tasks.length * 2; i++) {
-            tasks.forEach(task => {
+        for (let i = 0; i < activeTasks.length * 2; i++) {
+            activeTasks.forEach(task => {
                 if (task.dependencies && task.dependencies.length > 0) {
                     let maxPredecessorEndDate = new Date(0);
                     task.dependencies.forEach(depId => {
@@ -671,7 +691,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
         const positions = new Map();
         let currentY = 0;
 
-        const pWithData = projects.sort((a,b) => a.name.localeCompare(b.name)).map(p => { 
+        const pWithData = activeProjects.sort((a,b) => a.name.localeCompare(b.name)).map(p => { 
             const projectTasks = processedTasks.filter(t => t.projectId === p.id).sort((a,b) => (a.order || 0) - (b.order || 0));
             let totalDuration = 0; let weightedCompletion = 0; let projectTotalCost = 0; let projectSpentCost = 0;
             const projectTop = currentY;
@@ -731,12 +751,13 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
             return { ...p, tasks: enrichedTasks, projectCompletionPercentage, projectTotalCost, projectSpentCost, budget, extraCosts, budgetUsagePercentage, projectTop };
         }); 
         return { projectsWithData: pWithData, taskPositions: positions, ganttHeight: currentY };
-    }, [tasks, projects, resources, dateHeaders, DAY_WIDTH, ROW_HEIGHT, PROJECT_HEADER_HEIGHT]);
+    }, [tasks, activeProjects, resources, dateHeaders]);
 
     const arrowPaths = useMemo(() => {
         const paths = [];
-        if (!tasks || taskPositions.size === 0) return paths;
-        tasks.forEach(task => {
+        const activeTasks = tasks.filter(task => activeProjects.some(p => p.id === task.projectId));
+        if (!activeTasks || taskPositions.size === 0) return paths;
+        activeTasks.forEach(task => {
             if (task.dependencies && task.dependencies.length > 0) {
                 const successorPos = taskPositions.get(task.id);
                 if (!successorPos) return;
@@ -751,13 +772,29 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
             }
         });
         return paths;
-    }, [tasks, taskPositions, DAY_WIDTH, ROW_HEIGHT]);
+    }, [tasks, activeProjects, taskPositions]);
 
     const handleEditTask = (task) => { setEditingTask(tasks.find(t=>t.id === task.id)); setIsTaskModalOpen(true); };
     const handleEditProject = (project) => { setEditingProject(project); setIsProjectModalOpen(true); };
     const handleOpenNewProjectModal = () => { const existingColors = projects.map(p => p.color); let newColor; do { newColor = `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`; } while (existingColors.includes(newColor)); setEditingProject({ name: '', color: newColor }); setIsProjectModalOpen(true); };
     const confirmDeleteItem = (item, type) => setItemToDelete({item, type});
     
+    const handleArchiveProject = async (projectId, archiveStatus) => {
+        if (!userId || !projectId) return;
+        setLoadingMessage(archiveStatus ? "Archiviazione..." : "Ripristino...");
+        setIsLoading(true);
+        try {
+            const projectRef = doc(db, `users/${userId}/projects`, projectId);
+            await updateDoc(projectRef, { isArchived: archiveStatus });
+            setNotification({ message: `Progetto ${archiveStatus ? 'archiviato' : 'ripristinato'} con successo.`, type: "success" });
+        } catch (error) {
+            console.error("Errore archiviazione/ripristino progetto:", error);
+            setNotification({ message: "Errore durante l'operazione.", type: "error" });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     const handleDeleteItem = async () => {
         if (!itemToDelete || !userId) return;
         const { item, type } = itemToDelete;
@@ -899,19 +936,19 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
             }
         };
 
-        const doc = new jsPDF();
+        const docPDF = new jsPDF();
         try {
             if (reportType === 'cost' || reportType === 'activity') {
                 const title = reportType === 'cost' ? 'Report Costi' : 'Report Attività';
-                doc.text(title, 14, 15);
-                doc.autoTable({
+                docPDF.text(title, 14, 15);
+                docPDF.autoTable({
                     html: `#${reportType}-report-content table`,
                     startY: 20,
                     ...commonAutoTableOptions
                 });
             } else if (reportType === 'assignment') {
                 const content = document.getElementById('assignment-report-content');
-                doc.text('Report Assegnazioni', 14, 15);
+                docPDF.text('Report Assegnazioni', 14, 15);
                 let startY = 20;
                 const resourceDivs = content.querySelectorAll(':scope > div');
                 resourceDivs.forEach((div, index) => {
@@ -919,30 +956,30 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
                     const p = div.querySelector('p');
                     const table = div.querySelector('table');
 
-                    if (index > 0 && startY + 60 > doc.internal.pageSize.height) { 
-                       doc.addPage();
-                       startY = 15;
+                    if (index > 0 && startY + 60 > docPDF.internal.pageSize.height) { 
+                        docPDF.addPage();
+                        startY = 15;
                     }
                     
                     if (h3) { 
-                      const h3Style = window.getComputedStyle(h3);
-                      doc.setFontSize(12).setFont(undefined, 'bold'); 
-                      doc.setTextColor(h3Style.color);
-                      doc.text(h3.innerText, 14, startY); startY += 6; 
+                        const h3Style = window.getComputedStyle(h3);
+                        docPDF.setFontSize(12).setFont(undefined, 'bold'); 
+                        docPDF.setTextColor(h3Style.color);
+                        docPDF.text(h3.innerText, 14, startY); startY += 6; 
                     }
                     if (p) { 
-                      const pStyle = window.getComputedStyle(p);
-                      doc.setFontSize(10).setFont(undefined, 'normal'); 
-                      doc.setTextColor(pStyle.color);
-                      doc.text(p.innerText, 14, startY); startY += 4; 
+                        const pStyle = window.getComputedStyle(p);
+                        docPDF.setFontSize(10).setFont(undefined, 'normal'); 
+                        docPDF.setTextColor(pStyle.color);
+                        docPDF.text(p.innerText, 14, startY); startY += 4; 
                     }
                     if (table) {
-                        doc.autoTable({ html: table, startY: startY, ...commonAutoTableOptions });
-                        startY = doc.autoTable.previous.finalY + 10;
+                        docPDF.autoTable({ html: table, startY: startY, ...commonAutoTableOptions });
+                        startY = docPDF.autoTable.previous.finalY + 10;
                     }
                 });
             }
-            doc.output('dataurlnewwindow');
+            docPDF.output('dataurlnewwindow');
         } catch (e) {
             console.error("PDF export error:", e);
             setNotification({ message: `Errore durante la creazione del PDF: ${e.message}`, type: 'error' });
@@ -974,7 +1011,16 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
             {tooltip.visible && <div className="fixed bg-gray-800 text-white text-sm rounded-md px-3 py-2 z-50 pointer-events-none max-w-xs whitespace-pre-wrap shadow-lg" style={{ top: `${tooltip.y}px`, left: `${tooltip.x}px` }}>{tooltip.content}</div>}
             <header className="p-4 border-b flex items-center justify-between bg-white shadow-sm flex-wrap gap-2">
                 <div className="flex items-center gap-4"> <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1> <div className="flex items-center gap-1 rounded-lg bg-gray-200 p-1"> <button onClick={() => setView('gantt')} className={`px-2 py-1 text-sm font-medium rounded-md flex items-center gap-1 ${view==='gantt' ? 'bg-white shadow' : 'text-gray-600'}`}><LayoutDashboard size={16}/> Gantt</button> <button onClick={() => setView('assignmentReport')} className={`px-2 py-1 text-sm font-medium rounded-md flex items-center gap-1 ${view==='assignmentReport' ? 'bg-white shadow' : 'text-gray-600'}`}><ClipboardList size={16}/> Assegnazioni</button> <button onClick={() => setView('activityReport')} className={`px-2 py-1 text-sm font-medium rounded-md flex items-center gap-1 ${view==='activityReport' ? 'bg-white shadow' : 'text-gray-600'}`}><BarChart3 size={16}/> Attività</button> <button onClick={() => setView('costReport')} className={`px-2 py-1 text-sm font-medium rounded-md flex items-center gap-1 ${view==='costReport' ? 'bg-white shadow' : 'text-gray-600'}`}><BarChart3 size={16}/> Costi</button> </div> </div>
-                <div className="flex items-center gap-2 flex-wrap"> <button onClick={exportData} className="bg-gray-600 text-white px-3 py-2 rounded-md hover:bg-gray-700 flex items-center gap-2 text-sm"><FileDown size={16}/> Esporta Dati</button> <button onClick={() => fileInputRef.current.click()} className="bg-gray-600 text-white px-3 py-2 rounded-md hover:bg-gray-700 flex items-center gap-2 text-sm"><FileUp size={16}/> Importa Dati</button> <input type="file" ref={fileInputRef} onChange={handleFileImportChange} accept=".json" className="hidden"/> <button onClick={handleOpenNewProjectModal} className="bg-purple-600 text-white px-3 py-2 rounded-md hover:bg-purple-700 flex items-center gap-2 text-sm"> <Plus size={16} /> Progetto </button> <button onClick={() => setIsResourceModalOpen(true)} className="bg-yellow-500 text-white px-3 py-2 rounded-md hover:bg-yellow-600 flex items-center gap-2 text-sm"> <Users size={16} /> Risorse </button> <button onClick={() => { setEditingTask(null); setIsTaskModalOpen(true); }} className="bg-blue-500 text-white px-3 py-2 rounded-md hover:bg-blue-600 flex items-center gap-2 text-sm"> <Plus size={16} /> Attività </button> <button onClick={handleLogout} className="bg-red-500 text-white px-3 py-2 rounded-md hover:bg-red-600 flex items-center gap-2 text-sm"> <LogOut size={16} /> Logout </button> </div>
+                <div className="flex items-center gap-2 flex-wrap"> 
+                    <button onClick={() => setIsArchiveModalOpen(true)} className="bg-gray-500 text-white px-3 py-2 rounded-md hover:bg-gray-600 flex items-center gap-2 text-sm"> <Archive size={16}/> Archivio </button>
+                    <button onClick={exportData} className="bg-gray-600 text-white px-3 py-2 rounded-md hover:bg-gray-700 flex items-center gap-2 text-sm"><FileDown size={16}/> Esporta Dati</button> 
+                    <button onClick={() => fileInputRef.current.click()} className="bg-gray-600 text-white px-3 py-2 rounded-md hover:bg-gray-700 flex items-center gap-2 text-sm"><FileUp size={16}/> Importa Dati</button> 
+                    <input type="file" ref={fileInputRef} onChange={handleFileImportChange} accept=".json" className="hidden"/> 
+                    <button onClick={handleOpenNewProjectModal} className="bg-purple-600 text-white px-3 py-2 rounded-md hover:bg-purple-700 flex items-center gap-2 text-sm"> <Plus size={16} /> Progetto </button> 
+                    <button onClick={() => setIsResourceModalOpen(true)} className="bg-yellow-500 text-white px-3 py-2 rounded-md hover:bg-yellow-600 flex items-center gap-2 text-sm"> <Users size={16} /> Risorse </button> 
+                    <button onClick={() => { setEditingTask(null); setIsTaskModalOpen(true); }} className="bg-blue-500 text-white px-3 py-2 rounded-md hover:bg-blue-600 flex items-center gap-2 text-sm"> <Plus size={16} /> Attività </button> 
+                    <button onClick={handleLogout} className="bg-red-500 text-white px-3 py-2 rounded-md hover:bg-red-600 flex items-center gap-2 text-sm"> <LogOut size={16} /> Logout </button> 
+                </div>
             </header>
             <main className="flex-grow overflow-auto">
                 {view === 'gantt' ? (
@@ -982,11 +1028,16 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
                         <div className="grid" style={{ gridTemplateColumns: `${SIDEBAR_WIDTH}px 1fr`, width: `${SIDEBAR_WIDTH + dateHeaders.length * DAY_WIDTH}px` }}>
                             {/* Colonna Sinistra (Sidebar) */}
                             <div className="sticky left-0 z-20 bg-gray-50">
-                                <div className="sticky top-0 z-10 flex items-center justify-between h-12 px-4 border-b border-r bg-gray-100"><span className="font-semibold text-gray-700">Progetti</span><button onClick={() => exportToFile('gantt')} className="text-blue-600 hover:text-blue-800 p-1"><FileDown size={18}/></button></div>
+                                <div className="sticky top-0 z-10 flex items-center justify-between h-12 px-4 border-b border-r bg-gray-100"><span className="font-semibold text-gray-700">Progetti Attivi</span><button onClick={() => exportToFile('gantt')} className="text-blue-600 hover:text-blue-800 p-1"><FileDown size={18}/></button></div>
                                 {projectsWithData.map(project => (
                                     <div key={project.id} className="group/project">
                                         <div onClick={() => setSelectedProjectId(project.id)} className={`flex items-center justify-between p-2 px-4 cursor-pointer transition-all border-b border-r ${selectedProjectId === project.id ? 'bg-blue-200 border-l-4 border-blue-600' : 'bg-white'}`} style={{height: `${PROJECT_HEADER_HEIGHT}px`}}>
-                                            <div className="flex items-center gap-3 flex-grow overflow-hidden"><span className="w-4 h-4 rounded-full flex-shrink-0" style={{backgroundColor: project.color}}></span> <div className="flex-grow overflow-hidden"><h3 className="font-bold text-gray-800 truncate">{project.name}</h3> <div className="w-full bg-gray-300 rounded-full h-1.5 mt-1"><div className="bg-green-500 h-1.5 rounded-full" style={{width: `${project.projectCompletionPercentage.toFixed(0)}%`}}></div></div><span className="text-xs text-gray-500">Compl: {project.projectCompletionPercentage.toFixed(1)}%</span> {project.budget > 0 && (<span className={`text-xs ml-2 ${project.budgetUsagePercentage > 100 ? 'text-red-600 font-bold' : 'text-gray-500'}`}>Budget: {project.budgetUsagePercentage.toFixed(1)}%</span>)}</div></div><div className="flex items-center gap-2 flex-shrink-0 opacity-0 group-hover/project:opacity-100 transition-opacity"><button onClick={(e) => {e.stopPropagation(); handleEditProject(project)}} className="p-1 text-gray-500 hover:text-blue-600"><Edit size={16}/></button><button onClick={(e) => {e.stopPropagation(); confirmDeleteItem(project, 'project')}} className="p-1 text-gray-500 hover:text-red-600"><Trash2 size={16}/></button></div>
+                                            <div className="flex items-center gap-3 flex-grow overflow-hidden"><span className="w-4 h-4 rounded-full flex-shrink-0" style={{backgroundColor: project.color}}></span> <div className="flex-grow overflow-hidden"><h3 className="font-bold text-gray-800 truncate">{project.name}</h3> <div className="w-full bg-gray-300 rounded-full h-1.5 mt-1"><div className="bg-green-500 h-1.5 rounded-full" style={{width: `${project.projectCompletionPercentage.toFixed(0)}%`}}></div></div><span className="text-xs text-gray-500">Compl: {project.projectCompletionPercentage.toFixed(1)}%</span> {project.budget > 0 && (<span className={`text-xs ml-2 ${project.budgetUsagePercentage > 100 ? 'text-red-600 font-bold' : 'text-gray-500'}`}>Budget: {project.budgetUsagePercentage.toFixed(1)}%</span>)}</div></div>
+                                            <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover/project:opacity-100 transition-opacity">
+                                                <button onClick={(e) => {e.stopPropagation(); handleArchiveProject(project.id, true)}} className="p-1 text-gray-500 hover:text-yellow-600"><Archive size={16}/></button>
+                                                <button onClick={(e) => {e.stopPropagation(); handleEditProject(project)}} className="p-1 text-gray-500 hover:text-blue-600"><Edit size={16}/></button>
+                                                <button onClick={(e) => {e.stopPropagation(); confirmDeleteItem(project, 'project')}} className="p-1 text-gray-500 hover:text-red-600"><Trash2 size={16}/></button>
+                                            </div>
                                         </div>
                                         {project.tasks.map(task => (
                                             <div key={task.id} className="flex items-center group/task p-2 pl-9 border-b border-r bg-gray-50" style={{height: `${ROW_HEIGHT}px`}} onDoubleClick={() => handleEditTask(task)}>
@@ -1074,8 +1125,8 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
                                         );
                                     }))}
                                     <svg width="100%" height="100%" className="absolute top-0 left-0 z-10 pointer-events-none">
-                                      <defs> <marker id="arrowhead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"> <path d="M 0 0 L 10 5 L 0 10 z" fill="#0ea5e9" /> </marker> </defs>
-                                      {arrowPaths.map(path => (<path key={path.id} d={path.d} stroke="#0ea5e9" strokeWidth="2" fill="none" markerEnd="url(#arrowhead)" />))}
+                                        <defs> <marker id="arrowhead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"> <path d="M 0 0 L 10 5 L 0 10 z" fill="#0ea5e9" /> </marker> </defs>
+                                        {arrowPaths.map(path => (<path key={path.id} d={path.d} stroke="#0ea5e9" strokeWidth="2" fill="none" markerEnd="url(#arrowhead)" />))}
                                     </svg>
                                 </div>
                             </div>
@@ -1086,11 +1137,26 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
                 : ( <ActivityReportView projectsWithData={projectsWithData} onExportPDF={() => exportToFile('activity')} /> )
                 }
             </main>
-             <Modal isOpen={isTaskModalOpen} onClose={() => {setEditingTask(null); setIsTaskModalOpen(false);}} title={editingTask ? 'Modifica Attività' : 'Nuova Attività'}> <TaskForm db={db} userId={userId} projects={projects} task={editingTask} resources={resources} allTasks={tasks} onDone={() => {setEditingTask(null); setIsTaskModalOpen(false);}} selectedProjectIdForNew={selectedProjectId} /> </Modal>
+             <Modal isOpen={isTaskModalOpen} onClose={() => {setEditingTask(null); setIsTaskModalOpen(false);}} title={editingTask ? 'Modifica Attività' : 'Nuova Attività'}> <TaskForm db={db} userId={userId} projects={activeProjects} task={editingTask} resources={resources} allTasks={tasks} onDone={() => {setEditingTask(null); setIsTaskModalOpen(false);}} selectedProjectIdForNew={selectedProjectId} /> </Modal>
              <Modal isOpen={isResourceModalOpen} onClose={() => setIsResourceModalOpen(false)} title="Gestione Risorse"> <ResourceManagement resources={resources} db={db} userId={userId}/> </Modal>
              <Modal isOpen={isProjectModalOpen} onClose={() => {setEditingProject(null); setIsProjectModalOpen(false);}} title={editingProject && editingProject.id ? 'Modifica Progetto' : 'Nuovo Progetto'}> <ProjectForm project={editingProject} onDone={() => {setEditingProject(null); setIsProjectModalOpen(false);}} db={db} userId={userId} /> </Modal>
              <Modal isOpen={!!itemToDelete} onClose={() => setItemToDelete(null)} title="Conferma Eliminazione"> <div><div className="p-4 bg-red-100 border-l-4 border-red-500 text-red-700"> <p className="font-bold">ATTENZIONE!</p><p>Stai per eliminare {itemToDelete?.type === 'project' ? `il progetto "${itemToDelete.item.name}" e tutte le sue attività` : `l'attività "${itemToDelete?.item.name}"`}. Questa azione è irreversibile.</p></div> <div className="flex justify-end mt-4 gap-2"> <button onClick={() => setItemToDelete(null)} className="bg-gray-300 px-4 py-2 rounded-md">Annulla</button> <button onClick={handleDeleteItem} className="bg-red-600 text-white px-4 py-2 rounded-md">Elimina</button></div></div></Modal>
              <Modal isOpen={isImportConfirmOpen} onClose={() => setIsImportConfirmOpen(false)} title="Conferma Importazione"> <div><div className="p-4 bg-red-100 border-l-4 border-red-500 text-red-700"> <p className="font-bold">ATTENZIONE!</p><p>Stai per sovrascrivere tutti i tuoi dati con il contenuto del file. Questa azione è irreversibile. Sei sicuro?</p></div> <div className="flex justify-end mt-4 gap-2"> <button onClick={() => setIsImportConfirmOpen(false)} className="bg-gray-300 px-4 py-2 rounded-md">Annulla</button> <button onClick={importData} className="bg-red-600 text-white px-4 py-2 rounded-md">Sì, sovrascrivi</button></div></div></Modal>
+             <Modal isOpen={isArchiveModalOpen} onClose={() => setIsArchiveModalOpen(false)} title="Progetti Archiviati">
+                <div className="space-y-3">
+                    {archivedProjects.length > 0 ? archivedProjects.map(p => (
+                        <div key={p.id} className="flex items-center justify-between p-3 bg-gray-100 rounded-md">
+                            <div className="flex items-center gap-3">
+                                <span className="w-4 h-4 rounded-full flex-shrink-0" style={{backgroundColor: p.color}}></span>
+                                <span className="font-semibold">{p.name}</span>
+                            </div>
+                            <button onClick={() => handleArchiveProject(p.id, false)} className="text-blue-600 hover:text-blue-800 flex items-center gap-1 text-sm">
+                                <ArchiveRestore size={16}/> Ripristina
+                            </button>
+                        </div>
+                    )) : <p className="text-center text-gray-500">Nessun progetto archiviato.</p>}
+                </div>
+             </Modal>
         </div>
     );
 };
@@ -1162,9 +1228,6 @@ const AuthScreen = ({ auth, setNotification }) => {
 
 // --- COMPONENTE RADICE ---
 export default function App() {
-    const [app, setApp] = useState(null);
-    const [auth, setAuth] = useState(null);
-    const [db, setDb] = useState(null);
     const [user, setUser] = useState(null);
     const [isAuthReady, setIsAuthReady] = useState(false);
     const [notification, setNotification] = useState({ message: '', type: 'info' });
@@ -1177,28 +1240,11 @@ export default function App() {
         const scripts = [ { id: 'jspdf', src: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js' }, { id: 'jspdf-autotable', src: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js' }, { id: 'html2canvas', src: 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js' } ];
         scripts.forEach(scriptInfo => { if (!document.getElementById(scriptInfo.id)) { const script = document.createElement('script'); script.id = scriptInfo.id; script.src = scriptInfo.src; script.async = false; document.head.appendChild(script); } });
         
-        try { 
-            if (firebaseConfig && firebaseConfig.projectId) { 
-                const initializedApp = initializeApp(firebaseConfig); 
-                const authInstance = getAuth(initializedApp);
-                const firestoreInstance = getFirestore(initializedApp);
-                setApp(initializedApp);
-                setAuth(authInstance);
-                setDb(firestoreInstance); 
-                
-                const unsubscribe = onAuthStateChanged(authInstance, (currentUser) => {
-                    setUser(currentUser);
-                    setIsAuthReady(true);
-                });
-                return () => unsubscribe();
-            } else { 
-                console.error("Configurazione Firebase non fornita o incompleta."); 
-                setIsAuthReady(true); // Permette di mostrare un errore nell'UI
-            } 
-        } catch(e) { 
-            console.error("Errore inizializzazione Firebase:", e); 
-            setIsAuthReady(true); // Permette di mostrare un errore nell'UI
-        }
+        const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+            setUser(currentUser);
+            setIsAuthReady(true);
+        });
+        return () => unsubscribe();
     }, []);
 
     useEffect(() => {
@@ -1224,7 +1270,7 @@ export default function App() {
         return <div className="h-screen w-screen flex justify-center items-center bg-gray-100"><div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500 mr-4"></div><div className="text-xl font-semibold">Caricamento...</div></div>;
     }
     
-    if (!auth || !db) {
+    if (!firebaseConfig.apiKey) {
          return (
              <div className="h-screen w-screen flex flex-col justify-center items-center bg-gray-100 p-4">
                  <div className="max-w-md w-full bg-white shadow-md rounded-lg p-8 text-center">
@@ -1233,7 +1279,7 @@ export default function App() {
                      <p className="text-gray-500 mt-2 text-sm">Assicurati che le credenziali per l'ambiente siano state fornite correttamente.</p>
                  </div>
              </div>
-        );
+         );
     }
 
 
