@@ -4,7 +4,6 @@ import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWith
 import { getFirestore, collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, setDoc, query, where, writeBatch, getDocs } from 'firebase/firestore';
 import { ArrowRight, Plus, Users, Trash2, Edit, LayoutDashboard, BarChart3, X, AlertTriangle, FileDown, FileUp, CheckCircle, ClipboardList, StickyNote, LogOut, Percent } from 'lucide-react';
 
-
 // --- CONFIGURAZIONE FIREBASE ---
 const firebaseConfigString = import.meta.env.VITE_FIREBASE_CONFIG;
 const firebaseConfig = firebaseConfigString ? JSON.parse(firebaseConfigString) : {
@@ -798,65 +797,81 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
             return;
         }
 
-        setIsLoading(true);
-        setLoadingMessage(`Generazione PDF ${reportType}...`);
-
-        // --- INIZIO CODICE CORRETTO PER ESPORTAZIONE GANTT ---
+        // --- INIZIO CODICE CORRETTO PER ESPORTAZIONE ---
         if (reportType === 'gantt') {
             const ganttElement = ganttContainerRef.current;
-            const contentToCapture = ganttElement.firstChild; // Il div con la griglia
-
-            if (!contentToCapture) {
-                setNotification({ message: "Impossibile trovare il contenuto del Gantt da esportare.", type: 'error' });
-                setIsLoading(false);
+            if (!ganttElement) {
+                setNotification({ message: "Impossibile trovare l'elemento Gantt.", type: 'error' });
                 return;
             }
 
-            const captureOptions = {
-                backgroundColor: '#ffffff',
-                useCORS: true,
-                scale: 1.5, // Scala per una migliore risoluzione
-                width: contentToCapture.scrollWidth, // Usa la larghezza totale del contenuto
-                height: contentToCapture.scrollHeight, // Usa l'altezza totale del contenuto
-                windowWidth: contentToCapture.scrollWidth,
-                windowHeight: contentToCapture.scrollHeight,
-                x: 0, // Inizia la cattura dal bordo sinistro
-                y: 0  // Inizia la cattura dal bordo superiore
-            };
+            setIsLoading(true);
+            setLoadingMessage(`Generazione PDF Gantt...`);
 
-            window.html2canvas(contentToCapture, captureOptions)
-                .then(canvas => {
-                    const imgData = canvas.toDataURL('image/png');
-                    const doc = new jsPDF('l', 'mm', 'a4'); // 'l' per landscape
-                    const imgWidth = 280; // Larghezza A4 landscape in mm con margini
-                    const pageHeight = 190; // Altezza A4 landscape in mm con margini
-                    const imgHeight = canvas.height * imgWidth / canvas.width;
-                    let heightLeft = imgHeight;
-                    let position = 10; // Margine superiore
+            // Disabilita temporaneamente il posizionamento "sticky" che interferisce con html2canvas
+            const stickyElements = ganttElement.querySelectorAll('.sticky');
+            const originalPositions = new Map();
+            stickyElements.forEach(el => {
+                originalPositions.set(el, el.style.position);
+                el.style.position = 'relative'; // Imposta su relative per la cattura
+            });
 
-                    doc.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
-                    heightLeft -= pageHeight;
+            // Aggiunge un breve ritardo per consentire al DOM di aggiornarsi
+            setTimeout(() => {
+                const captureOptions = {
+                    backgroundColor: '#ffffff',
+                    useCORS: true,
+                    scale: 1.5,
+                    width: ganttElement.scrollWidth,
+                    height: ganttElement.scrollHeight,
+                    scrollX: -ganttElement.scrollLeft,
+                    scrollY: -ganttElement.scrollTop,
+                };
 
-                    // Aggiunge nuove pagine se l'immagine è più alta di una pagina
-                    while (heightLeft > 0) {
-                        position = -heightLeft + 10; // Sposta l'immagine verso l'alto sulla nuova pagina
-                        doc.addPage();
+                window.html2canvas(ganttElement, captureOptions)
+                    .then(canvas => {
+                        if (canvas.width === 0 || canvas.height === 0) {
+                            setNotification({ message: "La cattura del Gantt ha prodotto un'immagine vuota. Riprova.", type: 'error' });
+                            return; // Esce se la canvas è vuota
+                        }
+                        const imgData = canvas.toDataURL('image/png');
+                        const doc = new jsPDF('l', 'mm', 'a4');
+                        const imgWidth = 280;
+                        const pageHeight = 190;
+                        const imgHeight = canvas.height * imgWidth / canvas.width;
+                        let heightLeft = imgHeight;
+                        let position = 10;
+
                         doc.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
                         heightLeft -= pageHeight;
-                    }
-                    doc.output('dataurlnewwindow');
-                })
-                .catch((err) => {
-                    console.error("Gantt export error:", err);
-                    setNotification({ message: "Errore durante l'esportazione del Gantt.", type: 'error' });
-                })
-                .finally(() => {
-                    setIsLoading(false);
-                });
+
+                        while (heightLeft > 0) {
+                            position = -heightLeft + 10;
+                            doc.addPage();
+                            doc.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+                            heightLeft -= pageHeight;
+                        }
+                        doc.output('dataurlnewwindow');
+                    })
+                    .catch((err) => {
+                        console.error("Gantt export error:", err);
+                        setNotification({ message: "Errore durante l'esportazione del Gantt.", type: 'error' });
+                    })
+                    .finally(() => {
+                        // Ripristina il posizionamento "sticky" originale
+                        stickyElements.forEach(el => {
+                            el.style.position = originalPositions.get(el) || '';
+                        });
+                        setIsLoading(false);
+                    });
+            }, 250); // Ritardo di 250ms
             return;
         }
-        // --- FINE CODICE CORRETTO PER ESPORTAZIONE GANTT ---
+        // --- FINE CODICE CORRETTO PER ESPORTAZIONE ---
         
+        // Logica per altri report (invariata)
+        setIsLoading(true);
+        setLoadingMessage(`Generazione PDF ${reportType}...`);
         const convertToHex = (col) => {
             if (col.startsWith('#')) return col;
             if (!col || !col.startsWith('rgb') || col === 'rgba(0, 0, 0, 0)') return '#FFFFFF';
