@@ -4,6 +4,7 @@ import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWith
 import { getFirestore, collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, setDoc, query, where, writeBatch, getDocs } from 'firebase/firestore';
 import { ArrowRight, Plus, Users, Trash2, Edit, LayoutDashboard, BarChart3, X, AlertTriangle, FileDown, FileUp, CheckCircle, ClipboardList, StickyNote, LogOut, Percent } from 'lucide-react';
 
+
 // --- CONFIGURAZIONE FIREBASE ---
 const firebaseConfigString = import.meta.env.VITE_FIREBASE_CONFIG;
 const firebaseConfig = firebaseConfigString ? JSON.parse(firebaseConfigString) : {
@@ -16,6 +17,7 @@ const firebaseConfig = firebaseConfigString ? JSON.parse(firebaseConfigString) :
     appId: import.meta.env.VITE_FIREBASE_APP_ID,
     measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
+
 
 // --- FUNZIONI UTILI ---
 const calculateDaysDifference = (d1, d2) => {
@@ -543,7 +545,7 @@ const CostReportView = ({ projectsWithData, onExportPDF }) => {
                                                     <div className="mt-1 text-xs">
                                                         <span className="font-normal">Budget: {formatCurrency(project.budget)}</span>
                                                         <br/>
-                                                        <span className={`${project.budgetUsagePercentage > 100 ? 'font-extrabold' : 'font-normal'}`} style={{color: project.budgetUsagePercentage > 100 ? '#dc2626' : projectTextColor }}>
+                                                        <span className={`${project.budgetUsagePercentage > 100 ? 'font-extrabold' : 'font-normal'}`} style={{color: project.budgetUsagePercentage > 100 ? '#dc2626' : 'inherit' }}>
                                                             Utilizzo: {project.budgetUsagePercentage.toFixed(1)}%
                                                         </span>
                                                     </div>
@@ -797,11 +799,12 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
         }
 
         setIsLoading(true);
-        setLoadingMessage(`Generazione anteprima ${reportType}...`);
+        setLoadingMessage(`Generazione PDF ${reportType}...`);
 
+        // --- INIZIO CODICE CORRETTO PER ESPORTAZIONE GANTT ---
         if (reportType === 'gantt') {
             const ganttElement = ganttContainerRef.current;
-            const contentToCapture = ganttElement.firstChild;
+            const contentToCapture = ganttElement.firstChild; // Il div con la griglia
 
             if (!contentToCapture) {
                 setNotification({ message: "Impossibile trovare il contenuto del Gantt da esportare.", type: 'error' });
@@ -809,38 +812,50 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
                 return;
             }
 
-            window.html2canvas(contentToCapture, { 
+            const captureOptions = {
                 backgroundColor: '#ffffff',
-                useCORS: true, 
-                scale: 1.5,
-            })
-            .then(canvas => {
-                const imgData = canvas.toDataURL('image/png');
-                const doc = new jsPDF('l', 'mm', 'a4');
-                const imgWidth = 280; 
-                const pageHeight = 190;
-                const imgHeight = canvas.height * imgWidth / canvas.width;
-                let heightLeft = imgHeight; 
-                let position = 10;
-                doc.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
-                heightLeft -= pageHeight;
-                while (heightLeft > 0) {
-                    position = heightLeft - imgHeight + 10;
-                    doc.addPage();
+                useCORS: true,
+                scale: 1.5, // Scala per una migliore risoluzione
+                width: contentToCapture.scrollWidth, // Usa la larghezza totale del contenuto
+                height: contentToCapture.scrollHeight, // Usa l'altezza totale del contenuto
+                windowWidth: contentToCapture.scrollWidth,
+                windowHeight: contentToCapture.scrollHeight,
+                x: 0, // Inizia la cattura dal bordo sinistro
+                y: 0  // Inizia la cattura dal bordo superiore
+            };
+
+            window.html2canvas(contentToCapture, captureOptions)
+                .then(canvas => {
+                    const imgData = canvas.toDataURL('image/png');
+                    const doc = new jsPDF('l', 'mm', 'a4'); // 'l' per landscape
+                    const imgWidth = 280; // Larghezza A4 landscape in mm con margini
+                    const pageHeight = 190; // Altezza A4 landscape in mm con margini
+                    const imgHeight = canvas.height * imgWidth / canvas.width;
+                    let heightLeft = imgHeight;
+                    let position = 10; // Margine superiore
+
                     doc.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
                     heightLeft -= pageHeight;
-                }
-                doc.output('dataurlnewwindow');
-            })
-            .catch((err) => {
-                 console.error("Gantt export error:", err);
-                 setNotification({ message: "Errore durante l'esportazione del Gantt.", type: 'error' });
-            })
-            .finally(() => {
-                 setIsLoading(false);
-            });
+
+                    // Aggiunge nuove pagine se l'immagine è più alta di una pagina
+                    while (heightLeft > 0) {
+                        position = -heightLeft + 10; // Sposta l'immagine verso l'alto sulla nuova pagina
+                        doc.addPage();
+                        doc.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+                        heightLeft -= pageHeight;
+                    }
+                    doc.output('dataurlnewwindow');
+                })
+                .catch((err) => {
+                    console.error("Gantt export error:", err);
+                    setNotification({ message: "Errore durante l'esportazione del Gantt.", type: 'error' });
+                })
+                .finally(() => {
+                    setIsLoading(false);
+                });
             return;
         }
+        // --- FINE CODICE CORRETTO PER ESPORTAZIONE GANTT ---
         
         const convertToHex = (col) => {
             if (col.startsWith('#')) return col;
@@ -863,15 +878,23 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
                     const computedStyle = window.getComputedStyle(raw);
                     let bgColor = computedStyle.backgroundColor;
                     if (bgColor === 'rgba(0, 0, 0, 0)') {
-                        bgColor = '#FFFFFF';
+                        let currentElement = raw.parentElement;
+                        while(currentElement && bgColor === 'rgba(0, 0, 0, 0)') {
+                            bgColor = window.getComputedStyle(currentElement).backgroundColor;
+                            currentElement = currentElement.parentElement;
+                        }
                     }
-                    data.cell.styles.fillColor = bgColor;
+
+                    data.cell.styles.fillColor = convertToHex(bgColor || '#FFFFFF');
                     
-                    const hexColor = convertToHex(bgColor);
-                    const contrastingColor = getContrastingTextColor(hexColor);
-                    
-                    data.cell.styles.textColor = computedStyle.color || contrastingColor;
-                    data.cell.styles.halign = raw.style.textAlign || 'left';
+                    const contrastingColor = getContrastingTextColor(data.cell.styles.fillColor);
+                    const rawColor = computedStyle.color || contrastingColor;
+
+                    data.cell.styles.textColor = rawColor.startsWith('rgb') ? convertToHex(rawColor) : rawColor;
+                    data.cell.styles.halign = computedStyle.textAlign || 'left';
+                    if (computedStyle.fontWeight === 'bold' || parseInt(computedStyle.fontWeight) >= 700) {
+                      data.cell.styles.fontStyle = 'bold';
+                    }
                 }
             }
         };
@@ -891,16 +914,28 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
                 doc.text('Report Assegnazioni', 14, 15);
                 let startY = 20;
                 const resourceDivs = content.querySelectorAll(':scope > div');
-                resourceDivs.forEach((div) => {
+                resourceDivs.forEach((div, index) => {
                     const h3 = div.querySelector('h3');
                     const p = div.querySelector('p');
                     const table = div.querySelector('table');
-                    if (startY > 250) {
+
+                    if (index > 0 && startY + 60 > doc.internal.pageSize.height) { // Check space before adding content
                        doc.addPage();
                        startY = 15;
                     }
-                    if (h3) { doc.setFontSize(12).setFont(undefined, 'bold'); doc.text(h3.innerText, 14, startY); startY += 6; }
-                    if (p) { doc.setFontSize(10).setFont(undefined, 'normal'); doc.text(p.innerText, 14, startY); startY += 4; }
+                    
+                    if (h3) { 
+                      const h3Style = window.getComputedStyle(h3);
+                      doc.setFontSize(12).setFont(undefined, 'bold'); 
+                      doc.setTextColor(h3Style.color);
+                      doc.text(h3.innerText, 14, startY); startY += 6; 
+                    }
+                    if (p) { 
+                      const pStyle = window.getComputedStyle(p);
+                      doc.setFontSize(10).setFont(undefined, 'normal'); 
+                      doc.setTextColor(pStyle.color);
+                      doc.text(p.innerText, 14, startY); startY += 4; 
+                    }
                     if (table) {
                         doc.autoTable({ html: table, startY: startY, ...commonAutoTableOptions });
                         startY = doc.autoTable.previous.finalY + 10;
@@ -972,14 +1007,14 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
                                         const pos = taskPositions.get(task.id); 
                                         if(!pos) return null; 
                                         
-                                        const isPlaceholderVisible = task.isRescheduled && typeof pos.originalLeft === 'number';
+                                        const isPlaceholderVisible = (task.isRescheduled || task.startDate.toISOString() !== new Date(task.originalStartDate).toISOString()) && typeof pos.originalLeft === 'number';
 
                                         return (
                                             <div key={task.id} className="absolute" style={{ top: `${pos.top}px`, height: `${ROW_HEIGHT}px`, left: '0px', width: '100%', pointerEvents: 'none' }}>
 
                                                 {/* Main task bar */}
-                                                <div className="absolute flex items-center" style={{ top: `0px`, height: `${ROW_HEIGHT}px`, left: `${pos.left}px`, width: `${pos.width}px`, pointerEvents: 'auto', zIndex: 10 }}>
-                                                    <div draggable onDragStart={(e) => handleDragStart(e, task, 'move')} onDoubleClick={() => handleEditTask(task)} onMouseEnter={(e) => handleShowTooltip(e, task.notes)} onMouseMove={handleMoveTooltip} onMouseLeave={handleHideTooltip} className={`h-8 rounded-md shadow-sm flex items-center w-full group relative cursor-move box-border ${task.isRescheduled ? 'border-2 border-yellow-500' : ''}`} style={{ backgroundColor: task.taskColor || project.color || '#3b82f6' }}>
+                                                <div className="absolute flex items-center" style={{ top: `16px`, height: `32px`, left: `${pos.left}px`, width: `${pos.width}px`, pointerEvents: 'auto', zIndex: 10 }}>
+                                                    <div draggable onDragStart={(e) => handleDragStart(e, task, 'move')} onDoubleClick={() => handleEditTask(task)} onMouseEnter={(e) => handleShowTooltip(e, task.notes)} onMouseMove={handleMoveTooltip} onMouseLeave={handleHideTooltip} className={`h-full rounded-md shadow-sm flex items-center w-full group relative cursor-move box-border ${task.isRescheduled ? 'border-2 border-yellow-500' : ''}`} style={{ backgroundColor: task.taskColor || project.color || '#3b82f6' }}>
                                                         <div className="absolute top-0 left-0 h-full rounded-l-md" style={{width: `${task.completionPercentage || 0}%`, backgroundColor: 'rgba(0,0,0,0.2)'}}></div>
                                                         <div className="relative z-10 flex items-center justify-between w-full px-2">
                                                             <span className={`text-sm truncate font-medium ${getContrastingTextColor(task.taskColor || project.color)}`}>{task.name}</span>
@@ -1138,11 +1173,12 @@ export default function App() {
     const [resources, setResources] = useState([]);
     
     useEffect(() => {
+        // Carica dinamicamente gli script per la generazione di PDF
         const scripts = [ { id: 'jspdf', src: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js' }, { id: 'jspdf-autotable', src: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js' }, { id: 'html2canvas', src: 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js' } ];
         scripts.forEach(scriptInfo => { if (!document.getElementById(scriptInfo.id)) { const script = document.createElement('script'); script.id = scriptInfo.id; script.src = scriptInfo.src; script.async = false; document.head.appendChild(script); } });
         
         try { 
-            if (Object.values(firebaseConfig).every(v => v !== undefined) && firebaseConfig.projectId) { 
+            if (firebaseConfig && firebaseConfig.projectId) { 
                 const initializedApp = initializeApp(firebaseConfig); 
                 const authInstance = getAuth(initializedApp);
                 const firestoreInstance = getFirestore(initializedApp);
@@ -1157,11 +1193,11 @@ export default function App() {
                 return () => unsubscribe();
             } else { 
                 console.error("Configurazione Firebase non fornita o incompleta."); 
-                setIsAuthReady(true); // Allow UI to render an error state
+                setIsAuthReady(true); // Permette di mostrare un errore nell'UI
             } 
         } catch(e) { 
             console.error("Errore inizializzazione Firebase:", e); 
-            setIsAuthReady(true); // Allow UI to render an error state
+            setIsAuthReady(true); // Permette di mostrare un errore nell'UI
         }
     }, []);
 
@@ -1192,9 +1228,9 @@ export default function App() {
          return (
              <div className="h-screen w-screen flex flex-col justify-center items-center bg-gray-100 p-4">
                  <div className="max-w-md w-full bg-white shadow-md rounded-lg p-8 text-center">
-                    <h2 className="text-2xl font-bold text-red-600 mb-4">Errore di Configurazione</h2>
-                    <p className="text-gray-700">La configurazione di Firebase non è stata caricata correttamente.</p>
-                    <p className="text-gray-500 mt-2 text-sm">Assicurati che le credenziali per l'ambiente siano state fornite correttamente.</p>
+                     <h2 className="text-2xl font-bold text-red-600 mb-4">Errore di Configurazione</h2>
+                     <p className="text-gray-700">La configurazione di Firebase non è stata caricata correttamente.</p>
+                     <p className="text-gray-500 mt-2 text-sm">Assicurati che le credenziali per l'ambiente siano state fornite correttamente.</p>
                  </div>
              </div>
         );
