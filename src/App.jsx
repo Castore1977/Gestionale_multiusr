@@ -801,14 +801,18 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
 
         if (reportType === 'gantt') {
             const ganttElement = ganttContainerRef.current;
-            window.html2canvas(ganttElement, { 
+            const contentToCapture = ganttElement.firstChild;
+
+            if (!contentToCapture) {
+                setNotification({ message: "Impossibile trovare il contenuto del Gantt da esportare.", type: 'error' });
+                setIsLoading(false);
+                return;
+            }
+
+            window.html2canvas(contentToCapture, { 
                 backgroundColor: '#ffffff',
                 useCORS: true, 
-                scale: 1.5, 
-                width: ganttElement.scrollWidth, 
-                height: ganttElement.scrollHeight, 
-                windowWidth: ganttElement.scrollWidth, 
-                windowHeight: ganttElement.scrollHeight 
+                scale: 1.5,
             })
             .then(canvas => {
                 const imgData = canvas.toDataURL('image/png');
