@@ -225,7 +225,7 @@ const TaskForm = ({ db, projects, task, resources, allTasks, onDone, selectedPro
             const maxPredecessorEndDate = dependencies.reduce((latest, depId) => {
                 const predecessor = allTasks.find(t => t.id === depId);
                 if (!predecessor) return latest;
-                const predecessorEndDate = predecessor.isRescheduled && predecessor.rescheduledEndDate ? new Date(predecessor.rescheduledEndDate) : new Date(predecessor.endDate);
+                const predecessorEndDate = predecessor.isRescheduled && predecessor.rescheduledEndDate ? new Date(prededecessor.rescheduledEndDate) : new Date(predecessor.endDate);
                 return predecessorEndDate > latest ? predecessorEndDate : latest;
             }, new Date(0));
 
@@ -1081,7 +1081,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
                                         const pos = taskPositions.get(task.id); 
                                         if(!pos) return null; 
                                         
-                                        const isPlaceholderVisible = (task.isRescheduled || task.startDate.toISOString() !== new Date(task.originalStartDate).toISOString()) && typeof pos.originalLeft === 'number';
+                                        const isPlaceholderVisible = (task.isRescheduled || (task.originalStartDate && task.startDate.toISOString() !== new Date(task.originalStartDate).toISOString())) && typeof pos.originalLeft === 'number';
 
                                         return (
                                             <div key={task.id} className="absolute" style={{ top: `${pos.top}px`, height: `${ROW_HEIGHT}px`, left: '0px', width: '100%', pointerEvents: 'none' }}>
@@ -1108,7 +1108,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
                                                             top: '16px',
                                                             left: `${pos.originalLeft}px`,
                                                             width: `${pos.originalWidth}px`,
-                                                            zIndex: 5
+                                                            zIndex: 11 // Aumentato per stare sopra la barra principale
                                                         }}
                                                     />
                                                 )}
