@@ -1081,7 +1081,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
                                         const pos = taskPositions.get(task.id); 
                                         if(!pos) return null; 
                                         
-                                        const isPlaceholderVisible = (task.isRescheduled || (task.originalStartDate && task.startDate.toISOString() !== new Date(task.originalStartDate).toISOString())) && typeof pos.originalLeft === 'number';
+                                        const isPlaceholderVisible = task.isRescheduled && typeof pos.originalLeft === 'number';
 
                                         return (
                                             <div key={task.id} className="absolute" style={{ top: `${pos.top}px`, height: `${ROW_HEIGHT}px`, left: '0px', width: '100%', pointerEvents: 'none' }}>
