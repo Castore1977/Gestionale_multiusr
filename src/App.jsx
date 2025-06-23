@@ -1064,7 +1064,15 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
                                         </div>
                                         {project.tasks.map(task => (
                                             <div key={task.id} className="flex items-center group/task p-2 pl-9 border-b border-r bg-gray-50" style={{height: `${ROW_HEIGHT}px`}} onDoubleClick={() => handleEditTask(task)}>
-                                                <div className="flex-grow overflow-hidden"><p className="font-medium text-gray-900 truncate">{task.name}</p><div className="flex flex-wrap gap-1 mt-1">{task.assigned?.map(r => <span key={r.details.id} className="text-xs bg-gray-200 text-gray-800 px-1.5 py-0.5 rounded-full">{r.details.name} ({r.allocation}%)</span>)}</div></div>
+                                                <div className="flex-grow overflow-hidden">
+                                                    <p className="font-medium text-gray-900 truncate">
+                                                        {task.name}
+                                                        <span className={`ml-1 font-normal ${task.completionPercentage >= 100 ? 'text-green-600' : 'text-gray-500'}`}>
+                                                            ({task.completionPercentage || 0}%)
+                                                        </span>
+                                                    </p>
+                                                    <div className="flex flex-wrap gap-1 mt-1">{task.assigned?.map(r => <span key={r.details.id} className="text-xs bg-gray-200 text-gray-800 px-1.5 py-0.5 rounded-full">{r.details.name} ({r.allocation}%)</span>)}</div>
+                                                </div>
                                                 <div className="flex items-center opacity-0 group-hover/task:opacity-100 transition-opacity"><button onClick={(e) => {e.stopPropagation(); handleEditTask(task)}} className="p-1 text-gray-500 hover:text-blue-600"><Edit size={16}/></button><button onClick={(e) => {e.stopPropagation(); confirmDeleteItem(task, 'task')}} className="p-1 text-gray-500 hover:text-red-600"><Trash2 size={16}/></button></div>
                                             </div>
                                         ))} 
