@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, signInAnonymously } from 'firebase/auth';
+import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { getFirestore, collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, setDoc, query, where, writeBatch, getDocs } from 'firebase/firestore';
-import { ArrowRight, Plus, Users, Trash2, Edit, LayoutDashboard, BarChart3, X, AlertTriangle, FileDown, FileUp, CheckCircle, ClipboardList, StickyNote, LogOut, Percent } from 'lucide-react';
+import { ArrowRight, Plus, Users, Trash2, Edit, LayoutDashboard, BarChart3, X, AlertTriangle, FileDown, FileUp, CheckCircle, ClipboardList, StickyNote, LogOut, Percent, Archive, ArchiveRestore } from 'lucide-react';
 
 // --- CONFIGURAZIONE FIREBASE ---
 const firebaseConfigString = import.meta.env.VITE_FIREBASE_CONFIG;
@@ -16,6 +16,8 @@ const firebaseConfig = firebaseConfigString ? JSON.parse(firebaseConfigString) :
     appId: import.meta.env.VITE_FIREBASE_APP_ID,
     measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
+
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
 // --- FUNZIONI UTILI ---
 const calculateDaysDifference = (d1, d2) => {
@@ -76,23 +78,26 @@ const Notification = ({ message, onClose, type = 'info' }) => {
 };
 
 const Modal = ({ children, isOpen, onClose, title }) => {
- if (!isOpen) return null;
- return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex justify-center items-center p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-        <div className="p-4 border-b flex justify-between items-center sticky top-0 bg-white z-10"> <h3 className="text-xl font-semibold text-gray-800">{title}</h3> <button onClick={onClose} className="text-gray-500 hover:text-gray-800 text-2xl">&times;</button> </div>
-        <div className="p-6">{children}</div>
-      </div>
-    </div>
- );
+    if (!isOpen) return null;
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex justify-center items-center p-4">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+                <div className="p-4 border-b flex justify-between items-center sticky top-0 bg-white z-10">
+                    <h3 className="text-xl font-semibold text-gray-800">{title}</h3>
+                    <button onClick={onClose} className="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
+                </div>
+                <div className="p-6">{children}</div>
+            </div>
+        </div>
+    );
 };
 
 const DatePicker = ({ value, onChange, ...props }) => {
- const formatDate = (date) => {
-   if (!date) return '';
-   try { const d = new Date(date); const year = d.getFullYear(); const month = (d.getMonth() + 1).toString().padStart(2, '0'); const day = d.getDate().toString().padStart(2, '0'); return `${year}-${month}-${day}`; } catch(e) { return ''; }
- };
- return ( <input type="date" value={formatDate(value)} onChange={(e) => onChange(e.target.value)} className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm" {...props} /> );
+    const formatDate = (date) => {
+        if (!date) return '';
+        try { const d = new Date(date); const year = d.getFullYear(); const month = (d.getMonth() + 1).toString().padStart(2, '0'); const day = d.getDate().toString().padStart(2, '0'); return `${year}-${month}-${day}`; } catch(e) { return ''; }
+    };
+    return ( <input type="date" value={formatDate(value)} onChange={(e) => onChange(e.target.value)} className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm" {...props} /> );
 };
 
 // --- COMPONENTI SPECIFICI ---
@@ -122,6 +127,7 @@ const ProjectForm = ({ project, onDone, db, userId }) => {
     const [color, setColor] = useState(project ? project.color : '#a855f7');
     const [budget, setBudget] = useState(project ? project.budget || '' : '');
     const [extraCosts, setExtraCosts] = useState(project ? project.extraCosts || '' : '');
+    const [isArchived, setIsArchived] = useState(project ? project.isArchived || false : false);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -131,6 +137,7 @@ const ProjectForm = ({ project, onDone, db, userId }) => {
             color,
             budget: Number(budget) || 0,
             extraCosts: Number(extraCosts) || 0,
+            isArchived: isArchived,
         };
         try {
             if (project && project.id) {
@@ -163,6 +170,18 @@ const ProjectForm = ({ project, onDone, db, userId }) => {
                     <label htmlFor="project-extra-costs" className="block text-sm font-medium text-gray-700">Altre Spese (€)</label>
                     <input id="project-extra-costs" type="number" value={extraCosts} onChange={e => setExtraCosts(e.target.value)} placeholder="500" className="mt-1 block w-full px-3 py-2 border-gray-300 rounded-md shadow-sm" />
                 </div>
+            </div>
+             <div className="pt-2">
+                <label className="flex items-center space-x-3 p-3 rounded-md border hover:bg-gray-50 cursor-pointer">
+                    <input
+                        type="checkbox"
+                        checked={isArchived}
+                        onChange={(e) => setIsArchived(e.target.checked)}
+                        className="h-5 w-5 rounded text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-sm font-medium text-gray-700">Archivia Progetto</span>
+                </label>
+                <p className="text-xs text-gray-500 mt-1 pl-3">I progetti archiviati non appariranno nel Gantt o nei report, ma potranno essere consultati e ripristinati dalla sezione "Archivio".</p>
             </div>
             <div className="flex justify-end pt-4 gap-2">
                 <button type="button" onClick={onDone} className="bg-gray-300 text-gray-800 px-4 py-2 rounded-md">Annulla</button>
@@ -604,13 +623,67 @@ const CostReportView = ({ projectsWithData, onExportPDF }) => {
     );
 };
 
+// --- VISTA ARCHIVIO ---
+const ArchivedProjectsView = ({ projects, db, userId, setNotification }) => {
+    
+    const handleUnarchive = async (projectId) => {
+        if (!projectId || !userId) return;
+        const projectRef = doc(db, `users/${userId}/projects`, projectId);
+        try {
+            await updateDoc(projectRef, { isArchived: false });
+            setNotification({message: "Progetto ripristinato con successo.", type: "success"});
+        } catch (error) {
+            console.error("Errore nel ripristino del progetto:", error);
+            setNotification({message: "Errore nel ripristino del progetto.", type: "error"});
+        }
+    };
+
+    return (
+        <div className="p-4 md:p-6 lg:p-8">
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-800">Progetti Archiviati</h2>
+            </div>
+            <div className="bg-white shadow-md rounded-lg overflow-hidden">
+                <div className="space-y-4 p-4">
+                    {projects.length > 0 ? projects.sort((a,b) => a.name.localeCompare(b.name)).map(project => (
+                        <div key={project.id} className="bg-gray-50 p-4 rounded-md border flex items-center justify-between hover:bg-gray-100 transition-colors">
+                            <div className="flex items-center gap-4">
+                               <span className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: project.color }}></span>
+                               <span className="font-semibold text-gray-800">{project.name}</span>
+                            </div>
+                            <button 
+                                onClick={() => handleUnarchive(project.id)} 
+                                className="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 flex items-center gap-2 text-sm"
+                            >
+                                <ArchiveRestore size={16} /> Ripristina
+                            </button>
+                        </div>
+                    )) : (
+                        <div className="text-center py-12 text-gray-500">
+                            <Archive size={48} className="mx-auto mb-4" />
+                            <h3 className="text-xl font-semibold">Nessun progetto archiviato</h3>
+                            <p>Puoi archiviare un progetto modificandolo e spuntando la casella "Archivia".</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
 
 // --- VISTA MASTER ---
-const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
-    const [view, setView] = useState('gantt'); const [isLoading, setIsLoading] = useState(false); const [loadingMessage, setLoadingMessage] = useState(''); const [notification, setNotification] = useState({ message: '', type: 'info' }); const [isTaskModalOpen, setIsTaskModalOpen] = useState(false); const [isResourceModalOpen, setIsResourceModalOpen] = useState(false); const [isProjectModalOpen, setIsProjectModalOpen] = useState(false); const [editingTask, setEditingTask] = useState(null); const [editingProject, setEditingProject] = useState(null); const [isImportConfirmOpen, setIsImportConfirmOpen] = useState(false); const [importFile, setImportFile] = useState(null); const [selectedProjectId, setSelectedProjectId] = useState(null); const dragInfo = useRef({}); const fileInputRef = useRef(null);
+const MainDashboard = ({ projects, tasks, resources, db, userId, auth, setNotification }) => {
+    const [view, setView] = useState('gantt'); const [isLoading, setIsLoading] = useState(false); const [loadingMessage, setLoadingMessage] = useState(''); const [isTaskModalOpen, setIsTaskModalOpen] = useState(false); const [isResourceModalOpen, setIsResourceModalOpen] = useState(false); const [isProjectModalOpen, setIsProjectModalOpen] = useState(false); const [editingTask, setEditingTask] = useState(null); const [editingProject, setEditingProject] = useState(null); const [isImportConfirmOpen, setIsImportConfirmOpen] = useState(false); const [importFile, setImportFile] = useState(null); const [selectedProjectId, setSelectedProjectId] = useState(null); const dragInfo = useRef({}); const fileInputRef = useRef(null);
     const [itemToDelete, setItemToDelete] = useState(null);
     const ganttContainerRef = useRef(null);
     const [tooltip, setTooltip] = useState({ visible: false, content: '', x: 0, y: 0 });
+    
+    // Filtra i progetti in attivi e archiviati
+    const { activeProjects, archivedProjects } = useMemo(() => {
+        const active = projects.filter(p => !p.isArchived);
+        const archived = projects.filter(p => p.isArchived);
+        return { activeProjects: active, archivedProjects: archived };
+    }, [projects]);
     
     const ROW_HEIGHT = 64; const DAY_WIDTH = 40; const PROJECT_HEADER_HEIGHT = 64; const SIDEBAR_WIDTH = 384;
 
@@ -629,7 +702,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
     const dateHeaders = useMemo(() => { const headers = []; let currentDate = new Date(overallStartDate); currentDate.setDate(currentDate.getDate() - 1); for (let i = 0; i < totalDays + 2; i++) { headers.push(new Date(currentDate)); currentDate.setDate(currentDate.getDate() + 1); } return headers; }, [overallStartDate, totalDays]);
     
     const { projectsWithData, taskPositions, ganttHeight } = useMemo(() => {
-        if (!projects || !tasks || !resources || dateHeaders.length === 0) return { projectsWithData: [], taskPositions: new Map(), ganttHeight: 0 };
+        if (!activeProjects || !tasks || !resources || dateHeaders.length === 0) return { projectsWithData: [], taskPositions: new Map(), ganttHeight: 0 };
         
         const taskMap = {};
         tasks.forEach(task => {
@@ -671,7 +744,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
         const positions = new Map();
         let currentY = 0;
 
-        const pWithData = projects.sort((a,b) => a.name.localeCompare(b.name)).map(p => { 
+        const pWithData = activeProjects.sort((a,b) => a.name.localeCompare(b.name)).map(p => { 
             const projectTasks = processedTasks.filter(t => t.projectId === p.id).sort((a,b) => (a.order || 0) - (b.order || 0));
             let totalDuration = 0; let weightedCompletion = 0; let projectTotalCost = 0; let projectSpentCost = 0;
             const projectTop = currentY;
@@ -731,7 +804,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
             return { ...p, tasks: enrichedTasks, projectCompletionPercentage, projectTotalCost, projectSpentCost, budget, extraCosts, budgetUsagePercentage, projectTop };
         }); 
         return { projectsWithData: pWithData, taskPositions: positions, ganttHeight: currentY };
-    }, [tasks, projects, resources, dateHeaders, DAY_WIDTH, ROW_HEIGHT, PROJECT_HEADER_HEIGHT]);
+    }, [tasks, activeProjects, resources, dateHeaders, DAY_WIDTH, ROW_HEIGHT, PROJECT_HEADER_HEIGHT]);
 
     const arrowPaths = useMemo(() => {
         const paths = [];
@@ -899,19 +972,19 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
             }
         };
 
-        const doc = new jsPDF();
+        const docPDF = new jsPDF();
         try {
             if (reportType === 'cost' || reportType === 'activity') {
                 const title = reportType === 'cost' ? 'Report Costi' : 'Report Attività';
-                doc.text(title, 14, 15);
-                doc.autoTable({
+                docPDF.text(title, 14, 15);
+                docPDF.autoTable({
                     html: `#${reportType}-report-content table`,
                     startY: 20,
                     ...commonAutoTableOptions
                 });
             } else if (reportType === 'assignment') {
                 const content = document.getElementById('assignment-report-content');
-                doc.text('Report Assegnazioni', 14, 15);
+                docPDF.text('Report Assegnazioni', 14, 15);
                 let startY = 20;
                 const resourceDivs = content.querySelectorAll(':scope > div');
                 resourceDivs.forEach((div, index) => {
@@ -919,30 +992,30 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
                     const p = div.querySelector('p');
                     const table = div.querySelector('table');
 
-                    if (index > 0 && startY + 60 > doc.internal.pageSize.height) { 
-                       doc.addPage();
-                       startY = 15;
+                    if (index > 0 && startY + 60 > docPDF.internal.pageSize.height) { 
+                        docPDF.addPage();
+                        startY = 15;
                     }
                     
                     if (h3) { 
-                      const h3Style = window.getComputedStyle(h3);
-                      doc.setFontSize(12).setFont(undefined, 'bold'); 
-                      doc.setTextColor(h3Style.color);
-                      doc.text(h3.innerText, 14, startY); startY += 6; 
+                        const h3Style = window.getComputedStyle(h3);
+                        docPDF.setFontSize(12).setFont(undefined, 'bold'); 
+                        docPDF.setTextColor(h3Style.color);
+                        docPDF.text(h3.innerText, 14, startY); startY += 6; 
                     }
                     if (p) { 
-                      const pStyle = window.getComputedStyle(p);
-                      doc.setFontSize(10).setFont(undefined, 'normal'); 
-                      doc.setTextColor(pStyle.color);
-                      doc.text(p.innerText, 14, startY); startY += 4; 
+                        const pStyle = window.getComputedStyle(p);
+                        docPDF.setFontSize(10).setFont(undefined, 'normal'); 
+                        docPDF.setTextColor(pStyle.color);
+                        docPDF.text(p.innerText, 14, startY); startY += 4; 
                     }
                     if (table) {
-                        doc.autoTable({ html: table, startY: startY, ...commonAutoTableOptions });
-                        startY = doc.autoTable.previous.finalY + 10;
+                        docPDF.autoTable({ html: table, startY: startY, ...commonAutoTableOptions });
+                        startY = docPDF.autoTable.previous.finalY + 10;
                     }
                 });
             }
-            doc.output('dataurlnewwindow');
+            docPDF.output('dataurlnewwindow');
         } catch (e) {
             console.error("PDF export error:", e);
             setNotification({ message: `Errore durante la creazione del PDF: ${e.message}`, type: 'error' });
@@ -973,7 +1046,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
             <Notification message={notification.message} type={notification.type} onClose={() => setNotification({message: ''})} />
             {tooltip.visible && <div className="fixed bg-gray-800 text-white text-sm rounded-md px-3 py-2 z-50 pointer-events-none max-w-xs whitespace-pre-wrap shadow-lg" style={{ top: `${tooltip.y}px`, left: `${tooltip.x}px` }}>{tooltip.content}</div>}
             <header className="p-4 border-b flex items-center justify-between bg-white shadow-sm flex-wrap gap-2">
-                <div className="flex items-center gap-4"> <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1> <div className="flex items-center gap-1 rounded-lg bg-gray-200 p-1"> <button onClick={() => setView('gantt')} className={`px-2 py-1 text-sm font-medium rounded-md flex items-center gap-1 ${view==='gantt' ? 'bg-white shadow' : 'text-gray-600'}`}><LayoutDashboard size={16}/> Gantt</button> <button onClick={() => setView('assignmentReport')} className={`px-2 py-1 text-sm font-medium rounded-md flex items-center gap-1 ${view==='assignmentReport' ? 'bg-white shadow' : 'text-gray-600'}`}><ClipboardList size={16}/> Assegnazioni</button> <button onClick={() => setView('activityReport')} className={`px-2 py-1 text-sm font-medium rounded-md flex items-center gap-1 ${view==='activityReport' ? 'bg-white shadow' : 'text-gray-600'}`}><BarChart3 size={16}/> Attività</button> <button onClick={() => setView('costReport')} className={`px-2 py-1 text-sm font-medium rounded-md flex items-center gap-1 ${view==='costReport' ? 'bg-white shadow' : 'text-gray-600'}`}><BarChart3 size={16}/> Costi</button> </div> </div>
+                <div className="flex items-center gap-4"> <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1> <div className="flex items-center gap-1 rounded-lg bg-gray-200 p-1"> <button onClick={() => setView('gantt')} className={`px-2 py-1 text-sm font-medium rounded-md flex items-center gap-1 ${view==='gantt' ? 'bg-white shadow' : 'text-gray-600'}`}><LayoutDashboard size={16}/> Gantt</button> <button onClick={() => setView('assignmentReport')} className={`px-2 py-1 text-sm font-medium rounded-md flex items-center gap-1 ${view==='assignmentReport' ? 'bg-white shadow' : 'text-gray-600'}`}><ClipboardList size={16}/> Assegnazioni</button> <button onClick={() => setView('activityReport')} className={`px-2 py-1 text-sm font-medium rounded-md flex items-center gap-1 ${view==='activityReport' ? 'bg-white shadow' : 'text-gray-600'}`}><BarChart3 size={16}/> Attività</button> <button onClick={() => setView('costReport')} className={`px-2 py-1 text-sm font-medium rounded-md flex items-center gap-1 ${view==='costReport' ? 'bg-white shadow' : 'text-gray-600'}`}><BarChart3 size={16}/> Costi</button> <button onClick={() => setView('archived')} className={`px-2 py-1 text-sm font-medium rounded-md flex items-center gap-1 ${view==='archived' ? 'bg-white shadow' : 'text-gray-600'}`}><Archive size={16}/> Archivio</button></div> </div>
                 <div className="flex items-center gap-2 flex-wrap"> <button onClick={exportData} className="bg-gray-600 text-white px-3 py-2 rounded-md hover:bg-gray-700 flex items-center gap-2 text-sm"><FileDown size={16}/> Esporta Dati</button> <button onClick={() => fileInputRef.current.click()} className="bg-gray-600 text-white px-3 py-2 rounded-md hover:bg-gray-700 flex items-center gap-2 text-sm"><FileUp size={16}/> Importa Dati</button> <input type="file" ref={fileInputRef} onChange={handleFileImportChange} accept=".json" className="hidden"/> <button onClick={handleOpenNewProjectModal} className="bg-purple-600 text-white px-3 py-2 rounded-md hover:bg-purple-700 flex items-center gap-2 text-sm"> <Plus size={16} /> Progetto </button> <button onClick={() => setIsResourceModalOpen(true)} className="bg-yellow-500 text-white px-3 py-2 rounded-md hover:bg-yellow-600 flex items-center gap-2 text-sm"> <Users size={16} /> Risorse </button> <button onClick={() => { setEditingTask(null); setIsTaskModalOpen(true); }} className="bg-blue-500 text-white px-3 py-2 rounded-md hover:bg-blue-600 flex items-center gap-2 text-sm"> <Plus size={16} /> Attività </button> <button onClick={handleLogout} className="bg-red-500 text-white px-3 py-2 rounded-md hover:bg-red-600 flex items-center gap-2 text-sm"> <LogOut size={16} /> Logout </button> </div>
             </header>
             <main className="flex-grow overflow-auto">
@@ -982,7 +1055,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
                         <div className="grid" style={{ gridTemplateColumns: `${SIDEBAR_WIDTH}px 1fr`, width: `${SIDEBAR_WIDTH + dateHeaders.length * DAY_WIDTH}px` }}>
                             {/* Colonna Sinistra (Sidebar) */}
                             <div className="sticky left-0 z-20 bg-gray-50">
-                                <div className="sticky top-0 z-10 flex items-center justify-between h-12 px-4 border-b border-r bg-gray-100"><span className="font-semibold text-gray-700">Progetti</span><button onClick={() => exportToFile('gantt')} className="text-blue-600 hover:text-blue-800 p-1"><FileDown size={18}/></button></div>
+                                <div className="sticky top-0 z-10 flex items-center justify-between h-12 px-4 border-b border-r bg-gray-100"><span className="font-semibold text-gray-700">Progetti Attivi</span><button onClick={() => exportToFile('gantt')} className="text-blue-600 hover:text-blue-800 p-1"><FileDown size={18}/></button></div>
                                 {projectsWithData.map(project => (
                                     <div key={project.id} className="group/project">
                                         <div onClick={() => setSelectedProjectId(project.id)} className={`flex items-center justify-between p-2 px-4 cursor-pointer transition-all border-b border-r ${selectedProjectId === project.id ? 'bg-blue-200 border-l-4 border-blue-600' : 'bg-white'}`} style={{height: `${PROJECT_HEADER_HEIGHT}px`}}>
@@ -1083,10 +1156,11 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth }) => {
                     </div>
                 ) : view === 'costReport' ? ( <CostReportView projectsWithData={projectsWithData} onExportPDF={() => exportToFile('cost')} />
                 ) : view === 'assignmentReport' ? ( <AssignmentReportView projectsWithData={projectsWithData} resources={resources} onExportPDF={() => exportToFile('assignment')} /> )
+                : view === 'archived' ? ( <ArchivedProjectsView projects={archivedProjects} db={db} userId={userId} setNotification={setNotification} /> )
                 : ( <ActivityReportView projectsWithData={projectsWithData} onExportPDF={() => exportToFile('activity')} /> )
                 }
             </main>
-             <Modal isOpen={isTaskModalOpen} onClose={() => {setEditingTask(null); setIsTaskModalOpen(false);}} title={editingTask ? 'Modifica Attività' : 'Nuova Attività'}> <TaskForm db={db} userId={userId} projects={projects} task={editingTask} resources={resources} allTasks={tasks} onDone={() => {setEditingTask(null); setIsTaskModalOpen(false);}} selectedProjectIdForNew={selectedProjectId} /> </Modal>
+             <Modal isOpen={isTaskModalOpen} onClose={() => {setEditingTask(null); setIsTaskModalOpen(false);}} title={editingTask ? 'Modifica Attività' : 'Nuova Attività'}> <TaskForm db={db} userId={userId} projects={activeProjects} task={editingTask} resources={resources} allTasks={tasks} onDone={() => {setEditingTask(null); setIsTaskModalOpen(false);}} selectedProjectIdForNew={selectedProjectId} /> </Modal>
              <Modal isOpen={isResourceModalOpen} onClose={() => setIsResourceModalOpen(false)} title="Gestione Risorse"> <ResourceManagement resources={resources} db={db} userId={userId}/> </Modal>
              <Modal isOpen={isProjectModalOpen} onClose={() => {setEditingProject(null); setIsProjectModalOpen(false);}} title={editingProject && editingProject.id ? 'Modifica Progetto' : 'Nuovo Progetto'}> <ProjectForm project={editingProject} onDone={() => {setEditingProject(null); setIsProjectModalOpen(false);}} db={db} userId={userId} /> </Modal>
              <Modal isOpen={!!itemToDelete} onClose={() => setItemToDelete(null)} title="Conferma Eliminazione"> <div><div className="p-4 bg-red-100 border-l-4 border-red-500 text-red-700"> <p className="font-bold">ATTENZIONE!</p><p>Stai per eliminare {itemToDelete?.type === 'project' ? `il progetto "${itemToDelete.item.name}" e tutte le sue attività` : `l'attività "${itemToDelete?.item.name}"`}. Questa azione è irreversibile.</p></div> <div className="flex justify-end mt-4 gap-2"> <button onClick={() => setItemToDelete(null)} className="bg-gray-300 px-4 py-2 rounded-md">Annulla</button> <button onClick={handleDeleteItem} className="bg-red-600 text-white px-4 py-2 rounded-md">Elimina</button></div></div></Modal>
@@ -1246,5 +1320,5 @@ export default function App() {
         );
     }
     
-    return <MainDashboard projects={projects} tasks={tasks} resources={resources} db={db} userId={user.uid} auth={auth} />;
+    return <MainDashboard projects={projects} tasks={tasks} resources={resources} db={db} userId={user.uid} auth={auth} setNotification={setNotification} />;
 }
