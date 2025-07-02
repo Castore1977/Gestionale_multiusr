@@ -1041,6 +1041,25 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
     const today = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d; }, []);
     const todayMarkerPosition = useMemo(() => { if (dateHeaders.length === 0) return -1; return calculateDaysDifference(dateHeaders[0], today) * DAY_WIDTH; }, [dateHeaders, today]);
 
+    useEffect(() => {
+        // This effect runs when the view changes to 'gantt' or when the data is loaded/recalculated.
+        // It scrolls the Gantt chart horizontally to center the 'today' marker.
+        if (view === 'gantt' && ganttContainerRef.current && todayMarkerPosition >= 0) {
+            const container = ganttContainerRef.current;
+            
+            // The width of the visible area for the timeline (total width minus the sticky sidebar)
+            const timelineVisibleWidth = container.clientWidth - SIDEBAR_WIDTH;
+            
+            // We calculate the desired scrollLeft position.
+            // This is the today marker's position, minus half of the visible timeline width.
+            // We also add half a day's width to center the 'today' column itself, not just its left edge.
+            const scrollLeft = todayMarkerPosition - (timelineVisibleWidth / 2) + (DAY_WIDTH / 2);
+
+            // Set the scroll position, ensuring it's not negative.
+            container.scrollLeft = Math.max(0, scrollLeft);
+        }
+    }, [view, todayMarkerPosition]);
+
     return (
         <div className="h-screen w-screen bg-gray-100 flex flex-col font-sans">
             {isLoading && <Loader message={loadingMessage} />}
