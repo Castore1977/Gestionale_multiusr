@@ -225,8 +225,7 @@ const TaskForm = ({ db, projects, task, resources, allTasks, onDone, selectedPro
             const maxPredecessorEndDate = dependencies.reduce((latest, depId) => {
                 const predecessor = allTasks.find(t => t.id === depId);
                 if (!predecessor) return latest;
-                // FIXED typo here: prededecessor -> predecessor
-                const predecessorEndDate = predecessor.isRescheduled && predecessor.rescheduledEndDate ? new Date(predecessor.rescheduledEndDate) : new Date(predecessor.endDate);
+                const predecessorEndDate = predecessor.isRescheduled && predecessor.rescheduledEndDate ? new Date(prededecessor.rescheduledEndDate) : new Date(predecessor.endDate);
                 return predecessorEndDate > latest ? predecessorEndDate : latest;
             }, new Date(0));
 
@@ -1042,25 +1041,6 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
     const today = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d; }, []);
     const todayMarkerPosition = useMemo(() => { if (dateHeaders.length === 0) return -1; return calculateDaysDifference(dateHeaders[0], today) * DAY_WIDTH; }, [dateHeaders, today]);
 
-    // *** NUOVO EFFECT HOOK PER CENTRARE IL GANTT ***
-    // Questo effect si attiva quando la vista passa a 'gantt' o quando i dati cambiano.
-    // Calcola la posizione di scorrimento per centrare la data odierna e la applica al contenitore del Gantt.
-    useEffect(() => {
-        if (view === 'gantt' && ganttContainerRef.current && todayMarkerPosition > 0) {
-            const container = ganttContainerRef.current;
-            const visibleTimelineWidth = container.clientWidth - SIDEBAR_WIDTH;
-            const scrollPosition = todayMarkerPosition - (visibleTimelineWidth / 2);
-
-            // requestAnimationFrame assicura che lo scroll avvenga dopo che il browser ha renderizzato il layout.
-            requestAnimationFrame(() => {
-                if (container) { // Controllo aggiuntivo all'interno del frame
-                    container.scrollLeft = scrollPosition > 0 ? scrollPosition : 0;
-                }
-            });
-        }
-    }, [view, todayMarkerPosition]); // Dipendenze: si attiva al cambio di vista o al ricalcolo della posizione di "oggi".
-
-
     return (
         <div className="h-screen w-screen bg-gray-100 flex flex-col font-sans">
             {isLoading && <Loader message={loadingMessage} />}
@@ -1068,7 +1048,15 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
             {tooltip.visible && <div className="fixed bg-gray-800 text-white text-sm rounded-md px-3 py-2 z-50 pointer-events-none max-w-xs whitespace-pre-wrap shadow-lg" style={{ top: `${tooltip.y}px`, left: `${tooltip.x}px` }}>{tooltip.content}</div>}
             <header className="p-4 border-b flex items-center justify-between bg-white shadow-sm flex-wrap gap-2">
                 <div className="flex items-center gap-4"> <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1> <div className="flex items-center gap-1 rounded-lg bg-gray-200 p-1"> <button onClick={() => setView('gantt')} className={`px-2 py-1 text-sm font-medium rounded-md flex items-center gap-1 ${view==='gantt' ? 'bg-white shadow' : 'text-gray-600'}`}><LayoutDashboard size={16}/> Gantt</button> <button onClick={() => setView('assignmentReport')} className={`px-2 py-1 text-sm font-medium rounded-md flex items-center gap-1 ${view==='assignmentReport' ? 'bg-white shadow' : 'text-gray-600'}`}><ClipboardList size={16}/> Assegnazioni</button> <button onClick={() => setView('activityReport')} className={`px-2 py-1 text-sm font-medium rounded-md flex items-center gap-1 ${view==='activityReport' ? 'bg-white shadow' : 'text-gray-600'}`}><BarChart3 size={16}/> Attività</button> <button onClick={() => setView('costReport')} className={`px-2 py-1 text-sm font-medium rounded-md flex items-center gap-1 ${view==='costReport' ? 'bg-white shadow' : 'text-gray-600'}`}><BarChart3 size={16}/> Costi</button> <button onClick={() => setView('archived')} className={`px-2 py-1 text-sm font-medium rounded-md flex items-center gap-1 ${view==='archived' ? 'bg-white shadow' : 'text-gray-600'}`}><Archive size={16}/> Archivio</button></div> </div>
-                <div className="flex items-center gap-2 flex-wrap"> <button onClick={exportData} className="bg-gray-600 text-white px-3 py-2 rounded-md hover:bg-gray-700 flex items-center gap-2 text-sm"><FileDown size={16}/> Esporta Dati</button> <button onClick={() => fileInputRef.current.click()} className="bg-gray-600 text-white px-3 py-2 rounded-md hover:bg-gray-700 flex items-center gap-2 text-sm"><FileUp size={16}/> Importa Dati</button> <input type="file" ref={fileInputRef} onChange={handleFileImportChange} accept=".json" className="hidden"/> <button onClick={handleOpenNewProjectModal} className="bg-purple-600 text-white px-3 py-2 rounded-md hover:bg-purple-700 flex items-center gap-2 text-sm"> <Plus size={16} /> Progetto </button> <button onClick={() => setIsResourceModalOpen(true)} className="bg-yellow-500 text-white px-3 py-2 rounded-md hover:bg-yellow-600 flex items-center gap-2 text-sm"> <Users size={16} /> Risorse </button> <button onClick={() => { setEditingTask(null); setIsTaskModalOpen(true); }} className="bg-blue-500 text-white px-3 py-2 rounded-md hover:bg-blue-600 flex items-center gap-2 text-sm"> <Plus size={16} /> Attività </button> <button onClick={handleLogout} className="bg-red-500 text-white px-3 py-2 rounded-md hover:bg-red-600 flex items-center gap-2 text-sm"> <LogOut size={16} /> Logout </button> </div>
+                <div className="flex items-center gap-2 flex-wrap"> 
+                    <button onClick={exportData} className="bg-gray-600 text-white px-3 py-2 rounded-md hover:bg-gray-700 flex items-center gap-2 text-sm"><FileDown size={16}/> Esporta Dati</button> 
+                    <button onClick={() => fileInputRef.current.click()} className="bg-gray-600 text-white px-3 py-2 rounded-md hover:bg-gray-700 flex items-center gap-2 text-sm"><FileUp size={16}/> Importa Dati</button> 
+                    <input type="file" ref={fileInputRef} onChange={handleFileImportChange} accept=".json" className="hidden"/> 
+                    <button onClick={handleOpenNewProjectModal} className="bg-purple-600 text-white px-3 py-2 rounded-md hover:bg-purple-700 flex items-center gap-2 text-sm"> <Plus size={16} /> Progetto </button> 
+                    <button onClick={() => { setEditingTask(null); setSelectedProjectId(null); setIsTaskModalOpen(true); }} className="bg-blue-500 text-white px-3 py-2 rounded-md hover:bg-blue-600 flex items-center gap-2 text-sm"> <Plus size={16} /> Attività </button> 
+                    <button onClick={() => setIsResourceModalOpen(true)} className="bg-yellow-500 text-white px-3 py-2 rounded-md hover:bg-yellow-600 flex items-center gap-2 text-sm"> <Users size={16} /> Risorse </button> 
+                    <button onClick={handleLogout} className="bg-red-500 text-white px-3 py-2 rounded-md hover:bg-red-600 flex items-center gap-2 text-sm"> <LogOut size={16} /> Logout </button> 
+                </div>
             </header>
             <main className="flex-grow overflow-auto">
                 {view === 'gantt' ? (
@@ -1080,7 +1068,12 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
                                 {projectsWithData.map(project => (
                                     <div key={project.id} className="group/project">
                                         <div onClick={() => setSelectedProjectId(project.id)} className={`flex items-center justify-between p-2 px-4 cursor-pointer transition-all border-b border-r ${selectedProjectId === project.id ? 'bg-blue-200 border-l-4 border-blue-600' : 'bg-white'}`} style={{height: `${PROJECT_HEADER_HEIGHT}px`}}>
-                                            <div className="flex items-center gap-3 flex-grow overflow-hidden"><span className="w-4 h-4 rounded-full flex-shrink-0" style={{backgroundColor: project.color}}></span> <div className="flex-grow overflow-hidden"><h3 className="font-bold text-gray-800 truncate">{project.name}</h3> <div className="w-full bg-gray-300 rounded-full h-1.5 mt-1"><div className="bg-green-500 h-1.5 rounded-full" style={{width: `${project.projectCompletionPercentage.toFixed(0)}%`}}></div></div><span className="text-xs text-gray-500">Compl: {project.projectCompletionPercentage.toFixed(1)}%</span> {project.budget > 0 && (<span className={`text-xs ml-2 ${project.budgetUsagePercentage > 100 ? 'text-red-600 font-bold' : 'text-gray-500'}`}>Budget: {project.budgetUsagePercentage.toFixed(1)}%</span>)}</div></div><div className="flex items-center gap-2 flex-shrink-0 opacity-0 group-hover/project:opacity-100 transition-opacity"><button onClick={(e) => {e.stopPropagation(); handleEditProject(project)}} className="p-1 text-gray-500 hover:text-blue-600"><Edit size={16}/></button><button onClick={(e) => {e.stopPropagation(); confirmDeleteItem(project, 'project')}} className="p-1 text-gray-500 hover:text-red-600"><Trash2 size={16}/></button></div>
+                                            <div className="flex items-center gap-3 flex-grow overflow-hidden"><span className="w-4 h-4 rounded-full flex-shrink-0" style={{backgroundColor: project.color}}></span> <div className="flex-grow overflow-hidden"><h3 className="font-bold text-gray-800 truncate">{project.name}</h3> <div className="w-full bg-gray-300 rounded-full h-1.5 mt-1"><div className="bg-green-500 h-1.5 rounded-full" style={{width: `${project.projectCompletionPercentage.toFixed(0)}%`}}></div></div><span className="text-xs text-gray-500">Compl: {project.projectCompletionPercentage.toFixed(1)}%</span> {project.budget > 0 && (<span className={`text-xs ml-2 ${project.budgetUsagePercentage > 100 ? 'text-red-600 font-bold' : 'text-gray-500'}`}>Budget: {project.budgetUsagePercentage.toFixed(1)}%</span>)}</div></div>
+                                            <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover/project:opacity-100 transition-opacity">
+                                                <button onClick={(e) => { e.stopPropagation(); setEditingTask(null); setSelectedProjectId(project.id); setIsTaskModalOpen(true); }} className="p-1 text-gray-500 hover:text-green-600" title="Aggiungi attività a questo progetto"> <Plus size={16}/> </button>
+                                                <button onClick={(e) => {e.stopPropagation(); handleEditProject(project)}} className="p-1 text-gray-500 hover:text-blue-600"><Edit size={16}/></button>
+                                                <button onClick={(e) => {e.stopPropagation(); confirmDeleteItem(project, 'project')}} className="p-1 text-gray-500 hover:text-red-600"><Trash2 size={16}/></button>
+                                            </div>
                                         </div>
                                         {project.tasks.map(task => (
                                             <div key={task.id} className="flex items-center group/task p-2 pl-9 border-b border-r bg-gray-50" style={{height: `${ROW_HEIGHT}px`}} onDoubleClick={() => handleEditTask(task)}>
@@ -1136,7 +1129,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
                                                             top: '16px',
                                                             left: `${pos.originalLeft}px`,
                                                             width: `${pos.originalWidth}px`,
-                                                            zIndex: 5 
+                                                            zIndex: 11 // Aumentato per stare sopra la barra principale
                                                         }}
                                                     />
                                                 )}
@@ -1144,9 +1137,8 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
                                                 {/* Line indicator for the shift */}
                                                 {isPlaceholderVisible && (() => {
                                                     const dayDiff = calculateDaysDifference(new Date(task.originalStartDate), new Date(task.startDate));
-                                                    if (dayDiff === 0) return null;
                                                     const isForward = dayDiff > 0;
-                                                    const lineStart = isForward ? pos.originalLeft + pos.originalWidth : pos.left;
+                                                    const lineStart = isForward ? pos.originalLeft + pos.originalWidth : pos.left + pos.width;
                                                     const lineEnd = isForward ? pos.left : pos.originalLeft;
                                                     const lineWidth = Math.max(0, lineEnd - lineStart);
 
@@ -1282,7 +1274,7 @@ export default function App() {
         scripts.forEach(scriptInfo => { if (!document.getElementById(scriptInfo.id)) { const script = document.createElement('script'); script.id = scriptInfo.id; script.src = scriptInfo.src; script.async = false; document.head.appendChild(script); } });
         
         try { 
-            if (firebaseConfig && firebaseConfig.projectId && firebaseConfig.projectId !== "PASTE_YOUR_PROJECT_ID_HERE") { 
+            if (firebaseConfig && firebaseConfig.projectId) { 
                 const initializedApp = initializeApp(firebaseConfig); 
                 const authInstance = getAuth(initializedApp);
                 const firestoreInstance = getFirestore(initializedApp);
