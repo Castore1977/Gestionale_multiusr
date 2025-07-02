@@ -225,7 +225,8 @@ const TaskForm = ({ db, projects, task, resources, allTasks, onDone, selectedPro
             const maxPredecessorEndDate = dependencies.reduce((latest, depId) => {
                 const predecessor = allTasks.find(t => t.id === depId);
                 if (!predecessor) return latest;
-                const predecessorEndDate = predecessor.isRescheduled && predecessor.rescheduledEndDate ? new Date(prededecessor.rescheduledEndDate) : new Date(predecessor.endDate);
+                // FIXED typo here: prededecessor -> predecessor
+                const predecessorEndDate = predecessor.isRescheduled && predecessor.rescheduledEndDate ? new Date(predecessor.rescheduledEndDate) : new Date(predecessor.endDate);
                 return predecessorEndDate > latest ? predecessorEndDate : latest;
             }, new Date(0));
 
@@ -1041,6 +1042,25 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
     const today = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d; }, []);
     const todayMarkerPosition = useMemo(() => { if (dateHeaders.length === 0) return -1; return calculateDaysDifference(dateHeaders[0], today) * DAY_WIDTH; }, [dateHeaders, today]);
 
+    // *** NUOVO EFFECT HOOK PER CENTRARE IL GANTT ***
+    // Questo effect si attiva quando la vista passa a 'gantt' o quando i dati cambiano.
+    // Calcola la posizione di scorrimento per centrare la data odierna e la applica al contenitore del Gantt.
+    useEffect(() => {
+        if (view === 'gantt' && ganttContainerRef.current && todayMarkerPosition > 0) {
+            const container = ganttContainerRef.current;
+            const visibleTimelineWidth = container.clientWidth - SIDEBAR_WIDTH;
+            const scrollPosition = todayMarkerPosition - (visibleTimelineWidth / 2);
+
+            // requestAnimationFrame assicura che lo scroll avvenga dopo che il browser ha renderizzato il layout.
+            requestAnimationFrame(() => {
+                if (container) { // Controllo aggiuntivo all'interno del frame
+                    container.scrollLeft = scrollPosition > 0 ? scrollPosition : 0;
+                }
+            });
+        }
+    }, [view, todayMarkerPosition]); // Dipendenze: si attiva al cambio di vista o al ricalcolo della posizione di "oggi".
+
+
     return (
         <div className="h-screen w-screen bg-gray-100 flex flex-col font-sans">
             {isLoading && <Loader message={loadingMessage} />}
@@ -1116,7 +1136,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
                                                             top: '16px',
                                                             left: `${pos.originalLeft}px`,
                                                             width: `${pos.originalWidth}px`,
-                                                            zIndex: 11 // Aumentato per stare sopra la barra principale
+                                                            zIndex: 5 
                                                         }}
                                                     />
                                                 )}
@@ -1124,8 +1144,9 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
                                                 {/* Line indicator for the shift */}
                                                 {isPlaceholderVisible && (() => {
                                                     const dayDiff = calculateDaysDifference(new Date(task.originalStartDate), new Date(task.startDate));
+                                                    if (dayDiff === 0) return null;
                                                     const isForward = dayDiff > 0;
-                                                    const lineStart = isForward ? pos.originalLeft + pos.originalWidth : pos.left + pos.width;
+                                                    const lineStart = isForward ? pos.originalLeft + pos.originalWidth : pos.left;
                                                     const lineEnd = isForward ? pos.left : pos.originalLeft;
                                                     const lineWidth = Math.max(0, lineEnd - lineStart);
 
@@ -1261,7 +1282,7 @@ export default function App() {
         scripts.forEach(scriptInfo => { if (!document.getElementById(scriptInfo.id)) { const script = document.createElement('script'); script.id = scriptInfo.id; script.src = scriptInfo.src; script.async = false; document.head.appendChild(script); } });
         
         try { 
-            if (firebaseConfig && firebaseConfig.projectId) { 
+            if (firebaseConfig && firebaseConfig.projectId && firebaseConfig.projectId !== "PASTE_YOUR_PROJECT_ID_HERE") { 
                 const initializedApp = initializeApp(firebaseConfig); 
                 const authInstance = getAuth(initializedApp);
                 const firestoreInstance = getFirestore(initializedApp);
