@@ -225,7 +225,7 @@ const TaskForm = ({ db, projects, task, resources, allTasks, onDone, selectedPro
             const maxPredecessorEndDate = dependencies.reduce((latest, depId) => {
                 const predecessor = allTasks.find(t => t.id === depId);
                 if (!predecessor) return latest;
-                const predecessorEndDate = predecessor.isRescheduled && predecessor.rescheduledEndDate ? new Date(prededecessor.rescheduledEndDate) : new Date(predecessor.endDate);
+                const predecessorEndDate = predecessor.isRescheduled && predecessor.rescheduledEndDate ? new Date(predecessor.rescheduledEndDate) : new Date(predecessor.endDate);
                 return predecessorEndDate > latest ? predecessorEndDate : latest;
             }, new Date(0));
 
@@ -686,7 +686,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
         return { activeProjects: active, archivedProjects: archived };
     }, [projects]);
     
-    const ROW_HEIGHT = 64; const DAY_WIDTH = 40; const PROJECT_HEADER_HEIGHT = 64; const SIDEBAR_WIDTH = 384;
+    const ROW_HEIGHT = 64; const DAY_WIDTH = 40; const PROJECT_HEADER_HEIGHT = 64; const SIDEBAR_WIDTH = 384; const GANTT_HEADER_HEIGHT = 80; // Aumentata per mese + giorno
 
     const { overallStartDate, totalDays } = useMemo(() => { 
         if (tasks.length === 0) return { overallStartDate: new Date(), totalDays: 30 };
@@ -702,6 +702,29 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
 
     const dateHeaders = useMemo(() => { const headers = []; let currentDate = new Date(overallStartDate); currentDate.setDate(currentDate.getDate() - 1); for (let i = 0; i < totalDays + 2; i++) { headers.push(new Date(currentDate)); currentDate.setDate(currentDate.getDate() + 1); } return headers; }, [overallStartDate, totalDays]);
     
+    const monthHeaders = useMemo(() => {
+        if (!dateHeaders.length) return [];
+        const months = [];
+        let currentMonth = -1;
+        
+        dateHeaders.forEach(date => {
+            const month = date.getMonth();
+            const year = date.getFullYear();
+            if (month !== currentMonth) {
+                currentMonth = month;
+                months.push({
+                    name: date.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' }),
+                    year: year,
+                    month: month,
+                    days: 0
+                });
+            }
+            months[months.length - 1].days++;
+        });
+        
+        return months;
+    }, [dateHeaders]);
+
     const { projectsWithData, taskPositions, ganttHeight } = useMemo(() => {
         if (!activeProjects || !tasks || !resources || dateHeaders.length === 0) return { projectsWithData: [], taskPositions: new Map(), ganttHeight: 0 };
         
@@ -1083,7 +1106,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
                         <div className="grid" style={{ gridTemplateColumns: `${SIDEBAR_WIDTH}px 1fr`, width: `${SIDEBAR_WIDTH + dateHeaders.length * DAY_WIDTH}px` }}>
                             {/* Colonna Sinistra (Sidebar) */}
                             <div className="sticky left-0 z-20 bg-gray-50">
-                                <div className="sticky top-0 z-10 flex items-center justify-between h-12 px-4 border-b border-r bg-gray-100"><span className="font-semibold text-gray-700">Progetti Attivi</span><button onClick={() => exportToFile('gantt')} className="text-blue-600 hover:text-blue-800 p-1"><FileDown size={18}/></button></div>
+                                <div className="sticky top-0 z-10 flex items-center justify-between px-4 border-b border-r bg-gray-100" style={{height: `${GANTT_HEADER_HEIGHT}px`}}><span className="font-semibold text-gray-700">Progetti Attivi</span><button onClick={() => exportToFile('gantt')} className="text-blue-600 hover:text-blue-800 p-1"><FileDown size={18}/></button></div>
                                 {projectsWithData.map(project => (
                                     <div key={project.id} className="group/project">
                                         <div onClick={() => setSelectedProjectId(project.id)} className={`flex items-center justify-between p-2 px-4 cursor-pointer transition-all border-b border-r ${selectedProjectId === project.id ? 'bg-blue-200 border-l-4 border-blue-600' : 'bg-white'}`} style={{height: `${PROJECT_HEADER_HEIGHT}px`}}>
@@ -1114,7 +1137,20 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
                             </div>
                             {/* Colonna Destra (Timeline) */}
                             <div className="relative">
-                                <div className="sticky top-0 z-10 flex h-12 bg-white border-b">{dateHeaders.map((date) => { const isToday = date.toDateString() === today.toDateString(); return (<div key={date.toISOString()} className={`w-10 text-center border-r flex-shrink-0 flex flex-col justify-center ${isToday ? 'bg-red-200' : 'bg-gray-50'}`}><div className={`text-xs ${date.getDay() === 0 || date.getDay() === 6 ? 'text-red-500' : 'text-gray-500'}`}>{['D', 'L', 'M', 'M', 'G', 'V', 'S'][date.getDay()]}</div><div className={`text-sm font-semibold ${isToday ? 'text-red-600' : 'text-gray-800'}`}>{date.getDate()}</div></div>)})}</div>
+                                <div className="sticky top-0 z-10 flex flex-col bg-white border-b" style={{height: `${GANTT_HEADER_HEIGHT}px`}}>
+                                    {/* Riga Mesi */}
+                                    <div className="flex border-b">
+                                        {monthHeaders.map((month, index) => (
+                                            <div key={index} className="flex-shrink-0 text-center font-semibold text-gray-600 border-r" style={{ width: `${month.days * DAY_WIDTH}px`}}>
+                                                {month.name}
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {/* Riga Giorni */}
+                                    <div className="flex">
+                                        {dateHeaders.map((date) => { const isToday = date.toDateString() === today.toDateString(); return (<div key={date.toISOString()} className={`w-10 text-center border-r flex-shrink-0 flex flex-col justify-center ${isToday ? 'bg-red-200' : 'bg-gray-50'}`} style={{height: '48px'}}><div className={`text-xs ${date.getDay() === 0 || date.getDay() === 6 ? 'text-red-500' : 'text-gray-500'}`}>{['D', 'L', 'M', 'M', 'G', 'V', 'S'][date.getDay()]}</div><div className={`text-sm font-semibold ${isToday ? 'text-red-600' : 'text-gray-800'}`}>{date.getDate()}</div></div>)})}
+                                    </div>
+                                </div>
                                 <div className="relative" style={{height: `${ganttHeight}px`}}>
                                     <div className="absolute top-0 left-0 h-full w-0.5 bg-red-500 opacity-75 z-20" style={{ transform: `translateX(${todayMarkerPosition}px)`}}></div>
                                     {projectsWithData.map(project => project.tasks.map(task => { 
@@ -1148,7 +1184,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
                                                             top: '16px',
                                                             left: `${pos.originalLeft}px`,
                                                             width: `${pos.originalWidth}px`,
-                                                            zIndex: 11 // Aumentato per stare sopra la barra principale
+                                                            zIndex: 5 
                                                         }}
                                                     />
                                                 )}
