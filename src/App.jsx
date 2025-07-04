@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, onAuthStateChanged, signOut, signInWithCustomToken, signInAnonymously } from 'firebase/auth';
+import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { getFirestore, collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, setDoc, query, where, writeBatch, getDocs } from 'firebase/firestore';
 import { ArrowRight, Plus, Users, Trash2, Edit, LayoutDashboard, BarChart3, X, AlertTriangle, FileDown, FileUp, CheckCircle, ClipboardList, StickyNote, LogOut, Percent, Archive, ArchiveRestore } from 'lucide-react';
 
@@ -116,9 +116,9 @@ const ResourceManagement = ({ resources, db, userId }) => {
     const uniqueCompanies = useMemo(() => [...new Set(resources.map(r => r.company).filter(Boolean))], [resources]);
     const resetForm = () => { setEditingResource(null); setName(''); setCompany(''); setNotes(''); setHourlyCost(''); setEmail(''); setPhone(''); };
     const handleEdit = (resource) => { setEditingResource(resource); setName(resource.name); setCompany(resource.company || ''); setNotes(resource.notes || ''); setHourlyCost(resource.hourlyCost || ''); setEmail(resource.email || ''); setPhone(resource.phone || ''); };
-    const handleSubmit = async () => { if (name.trim() === '' || !userId) return; const resourceData = { name: name.trim(), company: company.trim(), notes: notes.trim(), hourlyCost: Number(hourlyCost) || 0, email: email.trim(), phone: phone.trim() }; try { if (editingResource) { await updateDoc(doc(db, `artifacts/${appId}/users/${userId}/resources`, editingResource.id), resourceData); } else { await addDoc(collection(db, `artifacts/${appId}/users/${userId}/resources`), resourceData); } resetForm(); } catch (error) { console.error("Errore salvataggio risorsa:", error); } };
+    const handleSubmit = async () => { if (name.trim() === '' || !userId) return; const resourceData = { name: name.trim(), company: company.trim(), notes: notes.trim(), hourlyCost: Number(hourlyCost) || 0, email: email.trim(), phone: phone.trim() }; try { if (editingResource) { await updateDoc(doc(db, `users/${userId}/resources`, editingResource.id), resourceData); } else { await addDoc(collection(db, `users/${userId}/resources`), resourceData); } resetForm(); } catch (error) { console.error("Errore salvataggio risorsa:", error); } };
     const confirmDelete = (id) => { setResourceToDelete(id); setIsConfirmOpen(true); };
-    const deleteResource = async () => { if (!resourceToDelete || !userId) return; try { await deleteDoc(doc(db, `artifacts/${appId}/users/${userId}/resources`, resourceToDelete)); } catch (error) { console.error("Errore eliminazione risorsa:", error); } finally { setIsConfirmOpen(false); setResourceToDelete(null); } };
+    const deleteResource = async () => { if (!resourceToDelete || !userId) return; try { await deleteDoc(doc(db, `users/${userId}/resources`, resourceToDelete)); } catch (error) { console.error("Errore eliminazione risorsa:", error); } finally { setIsConfirmOpen(false); setResourceToDelete(null); } };
 
     return ( <> <Modal isOpen={isConfirmOpen} onClose={() => setIsConfirmOpen(false)} title="Conferma Eliminazione"> <div> <p>Sei sicuro di voler eliminare questa risorsa?</p> <div className="flex justify-end mt-4"> <button onClick={() => setIsConfirmOpen(false)} className="bg-gray-300 text-gray-800 px-4 py-2 rounded-md mr-2">Annulla</button> <button onClick={deleteResource} className="bg-red-600 text-white px-4 py-2 rounded-md">Elimina</button> </div> </div> </Modal> <div> <h4 className="text-lg font-medium text-gray-700 mb-3">{editingResource ? 'Modifica Risorsa' : 'Aggiungi Risorsa'}</h4> <div className="space-y-4 p-4 border rounded-md bg-gray-50 mb-6"> <div className="grid grid-cols-1 md:grid-cols-2 gap-4"> <div> <label className="block text-sm font-medium text-gray-700">Nome Risorsa</label> <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Mario Rossi" className="mt-1 block w-full px-3 py-2 border-gray-300 rounded-md shadow-sm" required/> </div> <div> <label className="block text-sm font-medium text-gray-700">Società</label> <input type="text" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Acme Inc." className="mt-1 block w-full px-3 py-2 border-gray-300 rounded-md shadow-sm" list="companies-datalist" /> <datalist id="companies-datalist">{uniqueCompanies.map(c => <option key={c} value={c} />)}</datalist> </div> <div> <label className="block text-sm font-medium text-gray-700">Email</label> <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="mario.rossi@example.com" className="mt-1 block w-full px-3 py-2 border-gray-300 rounded-md shadow-sm" /> </div> <div> <label className="block text-sm font-medium text-gray-700">Telefono</label> <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+39 333 1234567" className="mt-1 block w-full px-3 py-2 border-gray-300 rounded-md shadow-sm" /> </div> <div> <label className="block text-sm font-medium text-gray-700">Costo Orario (€)</label> <input type="number" value={hourlyCost} onChange={(e) => setHourlyCost(e.target.value)} placeholder="50" className="mt-1 block w-full px-3 py-2 border-gray-300 rounded-md shadow-sm" /> </div> </div> <div> <label className="block text-sm font-medium text-gray-700">Note</label> <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Specializzazione, contatto, etc." rows="2" className="mt-1 block w-full px-3 py-2 border-gray-300 rounded-md shadow-sm"></textarea> </div> <div className="flex justify-end items-center gap-4"> {editingResource && (<button onClick={resetForm} className="text-sm text-gray-600 hover:underline">Annulla modifica</button>)} <button onClick={handleSubmit} className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 flex items-center gap-2"> <Plus size={16} /> {editingResource ? 'Salva Modifiche' : 'Aggiungi Risorsa'} </button> </div> </div> <h4 className="text-lg font-medium text-gray-700 mb-3">Elenco Risorse</h4> <div className="space-y-2 max-h-60 overflow-y-auto"> {resources.map(res => ( <div key={res.id} className="bg-white p-3 rounded-md border flex items-start justify-between"> <div className="flex-grow"> <p className="font-semibold text-gray-900">{res.name} <span className="text-sm font-normal text-gray-600">({formatCurrency(res.hourlyCost || 0)}/h)</span></p> {res.company && <p className="text-sm text-blue-700">{res.company}</p>} {res.email && <p className="text-sm text-gray-600">{res.email}</p>} {res.phone && <p className="text-sm text-gray-600">{res.phone}</p>} {res.notes && <p className="text-xs text-gray-500 mt-1">{res.notes}</p>} </div> <div className="flex-shrink-0 flex gap-2 ml-4"> <button onClick={() => handleEdit(res)} className="text-blue-600 hover:text-blue-800"><Edit size={16} /></button> <button onClick={() => confirmDelete(res.id)} className="text-red-500 hover:text-red-700"><Trash2 size={16} /></button> </div> </div> ))} </div> </div> </> );
 };
@@ -142,9 +142,9 @@ const ProjectForm = ({ project, onDone, db, userId }) => {
         };
         try {
             if (project && project.id) {
-                await updateDoc(doc(db, `artifacts/${appId}/users/${userId}/projects`, project.id), projectData);
+                await updateDoc(doc(db, `users/${userId}/projects`, project.id), projectData);
             } else {
-                await addDoc(collection(db, `artifacts/${appId}/users/${userId}/projects`), { ...projectData, createdAt: new Date().toISOString() });
+                await addDoc(collection(db, `users/${userId}/projects`), { ...projectData, createdAt: new Date().toISOString() });
             }
             onDone();
         } catch (error) {
@@ -225,7 +225,7 @@ const TaskForm = ({ db, projects, task, resources, allTasks, onDone, selectedPro
             const maxPredecessorEndDate = dependencies.reduce((latest, depId) => {
                 const predecessor = allTasks.find(t => t.id === depId);
                 if (!predecessor) return latest;
-                const predecessorEndDate = predecessor.isRescheduled && predecessor.rescheduledEndDate ? new Date(predecessor.rescheduledEndDate) : new Date(predecessor.endDate);
+                const predecessorEndDate = predecessor.isRescheduled && predecessor.rescheduledEndDate ? new Date(prededecessor.rescheduledEndDate) : new Date(predecessor.endDate);
                 return predecessorEndDate > latest ? predecessorEndDate : latest;
             }, new Date(0));
 
@@ -266,7 +266,7 @@ const TaskForm = ({ db, projects, task, resources, allTasks, onDone, selectedPro
 
         try {
             if (task) {
-                const taskRef = doc(db, `artifacts/${appId}/users/${userId}/tasks`, task.id);
+                const taskRef = doc(db, `users/${userId}/tasks`, task.id);
                 const updatePayload = { ...taskData };
                 if (!task.originalStartDate && !task.originalEndDate) {
                     updatePayload.originalStartDate = task.startDate;
@@ -274,7 +274,7 @@ const TaskForm = ({ db, projects, task, resources, allTasks, onDone, selectedPro
                 }
                 await updateDoc(taskRef, updatePayload);
             } else {
-                await addDoc(collection(db, `artifacts/${appId}/users/${userId}/tasks`), {
+                await addDoc(collection(db, `users/${userId}/tasks`), {
                     ...taskData,
                     originalStartDate: startDate,
                     originalEndDate: endDate,
@@ -629,7 +629,7 @@ const ArchivedProjectsView = ({ projects, db, userId, setNotification }) => {
     
     const handleUnarchive = async (projectId) => {
         if (!projectId || !userId) return;
-        const projectRef = doc(db, `artifacts/${appId}/users/${userId}/projects`, projectId);
+        const projectRef = doc(db, `users/${userId}/projects`, projectId);
         try {
             await updateDoc(projectRef, { isArchived: false });
             setNotification({message: "Progetto ripristinato con successo.", type: "success"});
@@ -702,38 +702,6 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
 
     const dateHeaders = useMemo(() => { const headers = []; let currentDate = new Date(overallStartDate); currentDate.setDate(currentDate.getDate() - 1); for (let i = 0; i < totalDays + 2; i++) { headers.push(new Date(currentDate)); currentDate.setDate(currentDate.getDate() + 1); } return headers; }, [overallStartDate, totalDays]);
     
-    const timelineHeaders = useMemo(() => {
-        const months = [];
-        if (dateHeaders.length === 0) return { months: [], days: [] };
-
-        let lastMonth = -1;
-        let lastYear = -1;
-
-        dateHeaders.forEach((date, index) => {
-            const month = date.getMonth();
-            const year = date.getFullYear();
-
-            if (month !== lastMonth || year !== lastYear) {
-                if (months.length > 0) {
-                    months[months.length - 1].colSpan = index - months[months.length - 1].startIndex;
-                }
-                months.push({
-                    name: `${date.toLocaleString('it-IT', { month: 'long' })} ${year}`,
-                    startIndex: index,
-                    colSpan: 0,
-                });
-                lastMonth = month;
-                lastYear = year;
-            }
-        });
-
-        if (months.length > 0) {
-            months[months.length - 1].colSpan = dateHeaders.length - months[months.length - 1].startIndex;
-        }
-
-        return { months, days: dateHeaders };
-    }, [dateHeaders]);
-
     const { projectsWithData, taskPositions, ganttHeight } = useMemo(() => {
         if (!activeProjects || !tasks || !resources || dateHeaders.length === 0) return { projectsWithData: [], taskPositions: new Map(), ganttHeight: 0 };
         
@@ -849,7 +817,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
                 task.dependencies.forEach(predecessorId => {
                     const predecessorPos = taskPositions.get(predecessorId);
                     if (!predecessorPos) return;
-                    const startX = predecessorPos.left + predecessorPos.width; const startY = successorPos.top + (ROW_HEIGHT / 2);
+                    const startX = predecessorPos.left + predecessorPos.width; const startY = predecessorPos.top + (ROW_HEIGHT / 2);
                     const endX = successorPos.left; const endY = successorPos.top + (ROW_HEIGHT / 2);
                     const path = `M ${startX} ${startY} L ${startX + DAY_WIDTH / 2} ${startY} L ${startX + DAY_WIDTH / 2} ${endY} L ${endX} ${endY}`;
                     paths.push({id: `${predecessorId}-${task.id}`, d: path});
@@ -872,14 +840,14 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
             const batch = writeBatch(db);
             if (type === 'task') {
                 const tasksToUpdate = tasks.filter(t => t.dependencies?.includes(item.id));
-                tasksToUpdate.forEach(t => { const taskRef = doc(db, `artifacts/${appId}/users/${userId}/tasks`, t.id); batch.update(taskRef, { dependencies: t.dependencies.filter(depId => depId !== item.id) }); });
-                const taskRef = doc(db, `artifacts/${appId}/users/${userId}/tasks`, item.id); batch.delete(taskRef);
+                tasksToUpdate.forEach(t => { const taskRef = doc(db, `users/${userId}/tasks`, t.id); batch.update(taskRef, { dependencies: t.dependencies.filter(depId => depId !== item.id) }); });
+                const taskRef = doc(db, `users/${userId}/tasks`, item.id); batch.delete(taskRef);
                 setNotification({message: "Attività eliminata.", type: "success"});
             } else if (type === 'project') {
-                const tasksQuery = query(collection(db, `artifacts/${appId}/users/${userId}/tasks`), where("projectId", "==", item.id));
+                const tasksQuery = query(collection(db, `users/${userId}/tasks`), where("projectId", "==", item.id));
                 const tasksSnapshot = await getDocs(tasksQuery);
                 tasksSnapshot.forEach(d => batch.delete(d.ref));
-                const projectRef = doc(db, `artifacts/${appId}/users/${userId}/projects`, item.id); batch.delete(projectRef);
+                const projectRef = doc(db, `users/${userId}/projects`, item.id); batch.delete(projectRef);
                 setNotification({message: "Progetto e attività eliminate.", type: "success"});
             }
             await batch.commit();
@@ -887,13 +855,13 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
         } finally { setItemToDelete(null); setIsLoading(false); }
     };
     
-    const handleGanttDrop = async (e) => { e.preventDefault(); if (!userId) return; const { taskId, type, initialX, initialStartDate, initialEndDate, isRescheduled, initialRescheduledEndDate } = dragInfo.current; if (!taskId) return; const dateOffset = Math.round((e.clientX - initialX) / DAY_WIDTH); let newStartDate, newEndDate, newRescheduledEndDate; const taskRef = doc(db, `artifacts/${appId}/users/${userId}/tasks`, taskId); let updateData = {}; if (type === 'move') { const duration = calculateDaysDifference(initialStartDate, isRescheduled ? initialRescheduledEndDate : initialEndDate); newStartDate = new Date(initialStartDate); newStartDate.setDate(newStartDate.getDate() + dateOffset); if (isRescheduled) { newRescheduledEndDate = new Date(newStartDate); newRescheduledEndDate.setDate(newRescheduledEndDate.getDate() + duration); updateData = { startDate: newStartDate.toISOString().split('T')[0], rescheduledEndDate: newRescheduledEndDate.toISOString().split('T')[0] }; } else { newEndDate = new Date(newStartDate); newEndDate.setDate(newEndDate.getDate() + duration); updateData = { startDate: newStartDate.toISOString().split('T')[0], endDate: newEndDate.toISOString().split('T')[0] }; } } else if (type === 'resize-end') { if (isRescheduled) { newRescheduledEndDate = new Date(initialRescheduledEndDate); newRescheduledEndDate.setDate(newRescheduledEndDate.getDate() + dateOffset); if (newRescheduledEndDate < new Date(initialStartDate)) newRescheduledEndDate = new Date(initialStartDate); updateData = { rescheduledEndDate: newRescheduledEndDate.toISOString().split('T')[0] }; } else { newEndDate = new Date(initialEndDate); newEndDate.setDate(newEndDate.getDate() + dateOffset); if (newEndDate < new Date(initialStartDate)) newEndDate = new Date(initialStartDate); updateData = { endDate: newEndDate.toISOString().split('T')[0] }; } } else if (type === 'resize-start') { newStartDate = new Date(initialStartDate); newStartDate.setDate(newStartDate.getDate() + dateOffset); const effectiveEndDate = isRescheduled ? new Date(initialRescheduledEndDate) : new Date(initialEndDate); if (newStartDate > effectiveEndDate) newStartDate = effectiveEndDate; updateData = { startDate: newStartDate.toISOString().split('T')[0] }; } else { return; } try { await updateDoc(taskRef, updateData); } catch(error) { console.error("Errore aggiornamento task:", error); } dragInfo.current = {}; };
+    const handleGanttDrop = async (e) => { e.preventDefault(); if (!userId) return; const { taskId, type, initialX, initialStartDate, initialEndDate, isRescheduled, initialRescheduledEndDate } = dragInfo.current; if (!taskId) return; const dateOffset = Math.round((e.clientX - initialX) / DAY_WIDTH); let newStartDate, newEndDate, newRescheduledEndDate; const taskRef = doc(db, `users/${userId}/tasks`, taskId); let updateData = {}; if (type === 'move') { const duration = calculateDaysDifference(initialStartDate, isRescheduled ? initialRescheduledEndDate : initialEndDate); newStartDate = new Date(initialStartDate); newStartDate.setDate(newStartDate.getDate() + dateOffset); if (isRescheduled) { newRescheduledEndDate = new Date(newStartDate); newRescheduledEndDate.setDate(newRescheduledEndDate.getDate() + duration); updateData = { startDate: newStartDate.toISOString().split('T')[0], rescheduledEndDate: newRescheduledEndDate.toISOString().split('T')[0] }; } else { newEndDate = new Date(newStartDate); newEndDate.setDate(newEndDate.getDate() + duration); updateData = { startDate: newStartDate.toISOString().split('T')[0], endDate: newEndDate.toISOString().split('T')[0] }; } } else if (type === 'resize-end') { if (isRescheduled) { newRescheduledEndDate = new Date(initialRescheduledEndDate); newRescheduledEndDate.setDate(newRescheduledEndDate.getDate() + dateOffset); if (newRescheduledEndDate < new Date(initialStartDate)) newRescheduledEndDate = new Date(initialStartDate); updateData = { rescheduledEndDate: newRescheduledEndDate.toISOString().split('T')[0] }; } else { newEndDate = new Date(initialEndDate); newEndDate.setDate(newEndDate.getDate() + dateOffset); if (newEndDate < new Date(initialStartDate)) newEndDate = new Date(initialStartDate); updateData = { endDate: newEndDate.toISOString().split('T')[0] }; } } else if (type === 'resize-start') { newStartDate = new Date(initialStartDate); newStartDate.setDate(newStartDate.getDate() + dateOffset); const effectiveEndDate = isRescheduled ? new Date(initialRescheduledEndDate) : new Date(initialEndDate); if (newStartDate > effectiveEndDate) newStartDate = effectiveEndDate; updateData = { startDate: newStartDate.toISOString().split('T')[0] }; } else { return; } try { await updateDoc(taskRef, updateData); } catch(error) { console.error("Errore aggiornamento task:", error); } dragInfo.current = {}; };
     const handleDragStart = (e, task, type) => { e.dataTransfer.effectAllowed = 'move'; dragInfo.current = { taskId: task.id, type, initialX: e.clientX, initialStartDate: task.startDate, initialEndDate: task.endDate, isRescheduled: task.isRescheduled, initialRescheduledEndDate: task.rescheduledEndDate }; };
 
     const exportData = () => { const dataToExport = { projects, tasks, resources, exportedAt: new Date().toISOString() }; const dataStr = JSON.stringify(dataToExport, null, 2); const blob = new Blob([dataStr], {type: "application/json"}); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `gantt_backup_${new Date().toISOString().split('T')[0]}.json`; document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url); setNotification({message: "Esportazione completata.", type: "success"}); };
     const handleFileImportChange = (e) => { const file = e.target.files[0]; if (file) { setImportFile(file); setIsImportConfirmOpen(true); } e.target.value = null; };
     
-    const importData = async () => { if (!importFile || !userId) return; setIsLoading(true); setLoadingMessage("Importazione in corso..."); const reader = new FileReader(); reader.onload = async (e) => { try { const data = JSON.parse(e.target.result); if (!data.projects || !data.tasks || !data.resources) { throw new Error("Formato file non valido."); } setLoadingMessage("Cancellazione dati esistenti..."); const collectionsToDelete = ['tasks', 'resources', 'projects']; for (const coll of collectionsToDelete) { const userCollRef = collection(db, `artifacts/${appId}/users/${userId}/${coll}`); const snapshot = await getDocs(userCollRef); const batch = writeBatch(db); snapshot.docs.forEach(d => batch.delete(d.ref)); await batch.commit(); } setLoadingMessage("Importazione nuovi dati..."); const importBatch = writeBatch(db); data.projects.forEach(p => {const {id, ...rest} = p; importBatch.set(doc(collection(db, `artifacts/${appId}/users/${userId}/projects`)), rest)}); data.tasks.forEach(t => {const {id, ...rest} = t; importBatch.set(doc(collection(db, `artifacts/${appId}/users/${userId}/tasks`)), rest)}); data.resources.forEach(r => {const {id, ...rest} = r; importBatch.set(doc(collection(db, `artifacts/${appId}/users/${userId}/resources`)), rest)}); await importBatch.commit(); setNotification({message: "Importazione completata!", type: "success"}); } catch (error) { console.error("Errore importazione:", error); setNotification({message: `Errore importazione: ${error.message}`, type: "error"}); } finally { setIsLoading(false); setImportFile(null); setIsImportConfirmOpen(false); } }; reader.readAsText(importFile); };
+    const importData = async () => { if (!importFile || !userId) return; setIsLoading(true); setLoadingMessage("Importazione in corso..."); const reader = new FileReader(); reader.onload = async (e) => { try { const data = JSON.parse(e.target.result); if (!data.projects || !data.tasks || !data.resources) { throw new Error("Formato file non valido."); } setLoadingMessage("Cancellazione dati esistenti..."); const collectionsToDelete = ['tasks', 'resources', 'projects']; for (const coll of collectionsToDelete) { const userCollRef = collection(db, `users/${userId}/${coll}`); const snapshot = await getDocs(userCollRef); const batch = writeBatch(db); snapshot.docs.forEach(d => batch.delete(d.ref)); await batch.commit(); } setLoadingMessage("Importazione nuovi dati..."); const importBatch = writeBatch(db); data.projects.forEach(p => {const {id, ...rest} = p; importBatch.set(doc(collection(db, `users/${userId}/projects`)), rest)}); data.tasks.forEach(t => {const {id, ...rest} = t; importBatch.set(doc(collection(db, `users/${userId}/tasks`)), rest)}); data.resources.forEach(r => {const {id, ...rest} = r; importBatch.set(doc(collection(db, `users/${userId}/resources`)), rest)}); await importBatch.commit(); setNotification({message: "Importazione completata!", type: "success"}); } catch (error) { console.error("Errore importazione:", error); setNotification({message: `Errore importazione: ${error.message}`, type: "error"}); } finally { setIsLoading(false); setImportFile(null); setIsImportConfirmOpen(false); } }; reader.readAsText(importFile); };
     
     const exportToFile = (reportType) => {
         const { jsPDF } = window.jspdf;
@@ -1064,7 +1032,6 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
     const handleLogout = async () => {
         try {
             await signOut(auth);
-            window.location.reload(); // Ricarica per avviare un nuovo flusso di login anonimo/token
         } catch (error) {
             console.error("Errore durante il logout:", error);
             setNotification({message: `Errore logout: ${error.message}`, type: "error"});
@@ -1113,13 +1080,10 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
             <main className="flex-grow overflow-auto">
                 {view === 'gantt' ? (
                     <div className="h-full w-full overflow-auto" ref={ganttContainerRef} onDrop={handleGanttDrop} onDragOver={e => e.preventDefault()}>
-                        <div className="grid" style={{ gridTemplateColumns: `${SIDEBAR_WIDTH}px 1fr`, width: `${SIDEBAR_WIDTH + timelineHeaders.days.length * DAY_WIDTH}px` }}>
+                        <div className="grid" style={{ gridTemplateColumns: `${SIDEBAR_WIDTH}px 1fr`, width: `${SIDEBAR_WIDTH + dateHeaders.length * DAY_WIDTH}px` }}>
                             {/* Colonna Sinistra (Sidebar) */}
                             <div className="sticky left-0 z-20 bg-gray-50">
-                                <div className="sticky top-0 z-10 flex items-center justify-between px-4 border-b border-r bg-gray-100" style={{height: '80px'}}>
-                                    <span className="font-semibold text-gray-700">Progetti Attivi</span>
-                                    <button onClick={() => exportToFile('gantt')} className="text-blue-600 hover:text-blue-800 p-1"><FileDown size={18}/></button>
-                                </div>
+                                <div className="sticky top-0 z-10 flex items-center justify-between h-12 px-4 border-b border-r bg-gray-100"><span className="font-semibold text-gray-700">Progetti Attivi</span><button onClick={() => exportToFile('gantt')} className="text-blue-600 hover:text-blue-800 p-1"><FileDown size={18}/></button></div>
                                 {projectsWithData.map(project => (
                                     <div key={project.id} className="group/project">
                                         <div onClick={() => setSelectedProjectId(project.id)} className={`flex items-center justify-between p-2 px-4 cursor-pointer transition-all border-b border-r ${selectedProjectId === project.id ? 'bg-blue-200 border-l-4 border-blue-600' : 'bg-white'}`} style={{height: `${PROJECT_HEADER_HEIGHT}px`}}>
@@ -1150,28 +1114,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
                             </div>
                             {/* Colonna Destra (Timeline) */}
                             <div className="relative">
-                                <div className="sticky top-0 z-10 bg-white">
-                                    {/* Month and Year Row */}
-                                    <div className="flex h-8 bg-gray-50 border-b">
-                                        {timelineHeaders.months.map(month => (
-                                            <div key={month.name} className="flex-shrink-0 text-center border-r font-semibold text-gray-700 flex items-center justify-center" style={{ width: `${month.colSpan * DAY_WIDTH}px` }}>
-                                                <span>{month.name}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                    {/* Day Row */}
-                                    <div className="flex h-12">
-                                        {timelineHeaders.days.map((date) => {
-                                            const isToday = date.toDateString() === today.toDateString();
-                                            return (
-                                                <div key={date.toISOString()} className={`w-10 text-center border-r flex-shrink-0 flex flex-col justify-center ${isToday ? 'bg-red-200' : 'bg-gray-50'}`}>
-                                                    <div className={`text-xs ${date.getDay() === 0 || date.getDay() === 6 ? 'text-red-500' : 'text-gray-500'}`}>{['D', 'L', 'M', 'M', 'G', 'V', 'S'][date.getDay()]}</div>
-                                                    <div className={`text-sm font-semibold ${isToday ? 'text-red-600' : 'text-gray-800'}`}>{date.getDate()}</div>
-                                                </div>
-                                            )
-                                        })}
-                                    </div>
-                                </div>
+                                <div className="sticky top-0 z-10 flex h-12 bg-white border-b">{dateHeaders.map((date) => { const isToday = date.toDateString() === today.toDateString(); return (<div key={date.toISOString()} className={`w-10 text-center border-r flex-shrink-0 flex flex-col justify-center ${isToday ? 'bg-red-200' : 'bg-gray-50'}`}><div className={`text-xs ${date.getDay() === 0 || date.getDay() === 6 ? 'text-red-500' : 'text-gray-500'}`}>{['D', 'L', 'M', 'M', 'G', 'V', 'S'][date.getDay()]}</div><div className={`text-sm font-semibold ${isToday ? 'text-red-600' : 'text-gray-800'}`}>{date.getDate()}</div></div>)})}</div>
                                 <div className="relative" style={{height: `${ganttHeight}px`}}>
                                     <div className="absolute top-0 left-0 h-full w-0.5 bg-red-500 opacity-75 z-20" style={{ transform: `translateX(${todayMarkerPosition}px)`}}></div>
                                     {projectsWithData.map(project => project.tasks.map(task => { 
@@ -1205,7 +1148,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
                                                             top: '16px',
                                                             left: `${pos.originalLeft}px`,
                                                             width: `${pos.originalWidth}px`,
-                                                            zIndex: 5
+                                                            zIndex: 11 // Aumentato per stare sopra la barra principale
                                                         }}
                                                     />
                                                 )}
@@ -1267,6 +1210,71 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
     );
 };
 
+// --- COMPONENTE DI AUTENTICAZIONE ---
+const AuthScreen = ({ auth, setNotification }) => {
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [isLogin, setIsLogin] = useState(true);
+    const [isLoading, setIsLoading] = useState(false);
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!email || !password) {
+            setNotification({ message: 'Email e password sono obbligatori.', type: 'error' });
+            return;
+        }
+        setIsLoading(true);
+        try {
+            if (isLogin) {
+                await signInWithEmailAndPassword(auth, email, password);
+            } else {
+                await createUserWithEmailAndPassword(auth, email, password);
+            }
+        } catch (error) {
+            console.error(`Errore durante ${isLogin ? 'il login' : 'la registrazione'}:`, error);
+            let message = "Si è verificato un errore.";
+            if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+                message = "Email o password non validi.";
+            } else if (error.code === 'auth/email-already-in-use') {
+                message = "Questo indirizzo email è già stato registrato.";
+            }
+            setNotification({ message: message, type: 'error' });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <div className="min-h-screen bg-gray-100 flex flex-col justify-center items-center p-4">
+            <div className="max-w-md w-full bg-white shadow-md rounded-lg p-8">
+                <h2 className="text-3xl font-bold text-center text-gray-800 mb-2">{isLogin ? 'Accedi' : 'Registrati'}</h2>
+                <p className="text-center text-gray-600 mb-8">Gestisci i tuoi progetti con facilità.</p>
+                <form onSubmit={handleSubmit} className="space-y-6">
+                    <div>
+                        <label htmlFor="email" className="block text-sm font-medium text-gray-700">Indirizzo Email</label>
+                        <input id="email" name="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500"/>
+                    </div>
+                    <div>
+                        <label htmlFor="password"className="block text-sm font-medium text-gray-700">Password</label>
+                        <input id="password" name="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500" />
+                    </div>
+                    <div>
+                        <button type="submit" disabled={isLoading} className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-300">
+                            {isLoading ? <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div> : (isLogin ? 'Accedi' : 'Crea Account')}
+                        </button>
+                    </div>
+                </form>
+                <div className="text-center mt-6">
+                    <button onClick={() => setIsLogin(!isLogin)} className="text-sm text-blue-600 hover:text-blue-500">
+                        {isLogin ? 'Non hai un account? Registrati' : 'Hai già un account? Accedi'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
 // --- COMPONENTE RADICE ---
 export default function App() {
     const [app, setApp] = useState(null);
@@ -1285,46 +1293,26 @@ export default function App() {
         scripts.forEach(scriptInfo => { if (!document.getElementById(scriptInfo.id)) { const script = document.createElement('script'); script.id = scriptInfo.id; script.src = scriptInfo.src; script.async = false; document.head.appendChild(script); } });
         
         try { 
-            if (!firebaseConfig || !firebaseConfig.projectId) {
-                console.error("Configurazione Firebase non fornita o incompleta.");
-                setNotification({ message: "Configurazione Firebase non fornita o incompleta.", type: 'error' });
-                setIsAuthReady(true); // Stop loading and show error
-                return;
-            }
-            
-            const initializedApp = initializeApp(firebaseConfig); 
-            const authInstance = getAuth(initializedApp);
-            const firestoreInstance = getFirestore(initializedApp);
-            setApp(initializedApp);
-            setAuth(authInstance);
-            setDb(firestoreInstance); 
-            
-            const unsubscribe = onAuthStateChanged(authInstance, (currentUser) => {
-                setUser(currentUser);
-                setIsAuthReady(true);
-            });
-
-            (async () => {
-                try {
-                    if (!authInstance.currentUser) {
-                         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                            await signInWithCustomToken(authInstance, __initial_auth_token);
-                        } else {
-                            await signInAnonymously(authInstance);
-                        }
-                    }
-                } catch (error) {
-                    console.error("Authentication error, trying anonymous:", error);
-                    await signInAnonymously(authInstance).catch(err => console.error("Anonymous sign in failed:", err));
-                }
-            })();
-
-            return () => unsubscribe();
-
+            if (firebaseConfig && firebaseConfig.projectId) { 
+                const initializedApp = initializeApp(firebaseConfig); 
+                const authInstance = getAuth(initializedApp);
+                const firestoreInstance = getFirestore(initializedApp);
+                setApp(initializedApp);
+                setAuth(authInstance);
+                setDb(firestoreInstance); 
+                
+                const unsubscribe = onAuthStateChanged(authInstance, (currentUser) => {
+                    setUser(currentUser);
+                    setIsAuthReady(true);
+                });
+                return () => unsubscribe();
+            } else { 
+                console.error("Configurazione Firebase non fornita o incompleta."); 
+                setIsAuthReady(true); // Permette di mostrare un errore nell'UI
+            } 
         } catch(e) { 
             console.error("Errore inizializzazione Firebase:", e); 
-            setNotification({ message: `Errore inizializzazione Firebase: ${e.message}`, type: 'error' });
-            setIsAuthReady(true);
+            setIsAuthReady(true); // Permette di mostrare un errore nell'UI
         }
     }, []);
 
@@ -1340,9 +1328,9 @@ export default function App() {
 
         const userId = user.uid;
 
-        const unsubProjects = onSnapshot(query(collection(db, `artifacts/${appId}/users/${userId}/projects`)), snap => setProjects(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-        const unsubTasks = onSnapshot(query(collection(db, `artifacts/${appId}/users/${userId}/tasks`)), snap => setTasks(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-        const unsubResources = onSnapshot(query(collection(db, `artifacts/${appId}/users/${userId}/resources`)), snap => setResources(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+        const unsubProjects = onSnapshot(query(collection(db, `users/${userId}/projects`)), snap => setProjects(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+        const unsubTasks = onSnapshot(query(collection(db, `users/${userId}/tasks`)), snap => setTasks(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+        const unsubResources = onSnapshot(query(collection(db, `users/${userId}/resources`)), snap => setResources(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
         
         return () => { unsubProjects(); unsubTasks(); unsubResources(); };
     }, [isAuthReady, db, user]);
@@ -1354,18 +1342,23 @@ export default function App() {
     if (!auth || !db) {
          return (
              <div className="h-screen w-screen flex flex-col justify-center items-center bg-gray-100 p-4">
-                 <Notification message={notification.message} type={notification.type} onClose={() => setNotification({ message: '' })} />
                  <div className="max-w-md w-full bg-white shadow-md rounded-lg p-8 text-center">
                      <h2 className="text-2xl font-bold text-red-600 mb-4">Errore di Configurazione</h2>
                      <p className="text-gray-700">La configurazione di Firebase non è stata caricata correttamente.</p>
-                     <p className="text-gray-500 mt-2 text-sm">Assicurati che le credenziali Firebase siano valide e che il campo 'projectId' sia presente.</p>
+                     <p className="text-gray-500 mt-2 text-sm">Assicurati che le credenziali per l'ambiente siano state fornite correttamente.</p>
                  </div>
              </div>
         );
     }
 
+
     if (!user) {
-        return <div className="h-screen w-screen flex justify-center items-center bg-gray-100"><div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500 mr-4"></div><div className="text-xl font-semibold">Autenticazione in corso...</div></div>;
+        return (
+            <>
+                <Notification message={notification.message} type={notification.type} onClose={() => setNotification({ message: '' })} />
+                <AuthScreen auth={auth} setNotification={setNotification} />
+            </>
+        );
     }
     
     return <MainDashboard projects={projects} tasks={tasks} resources={resources} db={db} userId={user.uid} auth={auth} notification={notification} setNotification={setNotification} />;
