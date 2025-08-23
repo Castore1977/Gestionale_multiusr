@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { initializeApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { getFirestore, collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, setDoc, query, where, writeBatch, getDocs } from 'firebase/firestore';
-import { ArrowRight, Plus, Users, Trash2, Edit, LayoutDashboard, BarChart3, X, AlertTriangle, FileDown, FileUp, CheckCircle, ClipboardList, StickyNote, LogOut, Percent, Archive, ArchiveRestore } from 'lucide-react';
+import { ArrowRight, Plus, Users, Trash2, Edit, LayoutDashboard, BarChart3, X, AlertTriangle, FileDown, FileUp, CheckCircle, ClipboardList, StickyNote, LogOut, Percent, Archive, ArchiveRestore, GripVertical } from 'lucide-react';
 
 // --- CONFIGURAZIONE FIREBASE ---
 const firebaseConfig = (typeof __firebase_config !== 'undefined' && __firebase_config)
@@ -808,6 +808,8 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
     const ganttContainerRef = useRef(null);
     const [tooltip, setTooltip] = useState({ visible: false, content: '', x: 0, y: 0 });
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+    const draggedTaskRef = useRef(null);
+    const dragOverTaskRef = useRef(null);
     
     // Filtra i progetti in attivi e archiviati
     const { activeProjects, archivedProjects } = useMemo(() => {
@@ -1026,6 +1028,12 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
         setIsLoading(true);
         setLoadingMessage(`Preparazione esportazione Gantt...`);
 
+        // Reset scroll position to ensure consistent capture
+        const originalScrollTop = ganttElement.scrollTop;
+        const originalScrollLeft = ganttElement.scrollLeft;
+        ganttElement.scrollTop = 0;
+        ganttElement.scrollLeft = 0;
+
         const stickyElements = ganttElement.querySelectorAll('.sticky');
         const originalPositions = new Map();
         stickyElements.forEach(el => {
@@ -1033,7 +1041,8 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
             el.style.position = 'relative'; 
         });
 
-        await new Promise(resolve => setTimeout(resolve, 250));
+        // Allow the DOM to update before capturing
+        await new Promise(resolve => setTimeout(resolve, 300));
 
         try {
             const sourceCanvas = await window.html2canvas(ganttElement, {
@@ -1053,26 +1062,50 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
 
             // Determine Y-axis crop (project filtering)
             const projectToExport = (projectId && projectId !== 'all') ? projectsWithData.find(p => p.id === projectId) : null;
-            const contentCropY = (projectToExport?.projectTop ?? projectsWithData[0]?.projectTop ?? 0) * scale;
+            let contentCropY;
             let contentCropHeight;
+
             if (projectToExport) {
+                contentCropY = projectToExport.projectTop * scale;
                 const projectContentHeight = PROJECT_HEADER_HEIGHT + (projectToExport.tasks.length > 0 ? projectToExport.tasks.length * ROW_HEIGHT : ROW_HEIGHT);
                 contentCropHeight = projectContentHeight * scale;
-            } else {
-                contentCropHeight = (ganttHeight - (projectsWithData[0]?.projectTop ?? 0)) * scale;
+            } else { // All projects
+                const firstProjectY = projectsWithData.length > 0 ? projectsWithData[0].projectTop : 0;
+                contentCropY = firstProjectY * scale;
+                contentCropHeight = (ganttHeight - firstProjectY) * scale;
             }
 
             // Determine X-axis crop (date filtering)
-            const overallStartDate = dateHeaders[0];
-            const cropTimeline = startDate && endDate;
+            const ganttStartDate = dateHeaders[0];
+            let startOffsetDays, durationDays;
+
+            if (startDate && endDate) { // Date range is specified
+                startOffsetDays = calculateDaysDifference(ganttStartDate, new Date(startDate));
+                durationDays = calculateDaysDifference(new Date(startDate), new Date(endDate)) + 1;
+            } else { // Auto-calculate tightest date range for selected project(s)
+                const tasksToConsider = projectToExport ? projectToExport.tasks : tasks;
+                if (tasksToConsider.length > 0) {
+                    const minDate = new Date(Math.min(...tasksToConsider.map(t => new Date(t.startDate))));
+                    const maxDate = new Date(Math.max(...tasksToConsider.map(t => new Date(t.effectiveEndDate || t.endDate))));
+                    startOffsetDays = calculateDaysDifference(ganttStartDate, minDate);
+                    durationDays = calculateDaysDifference(minDate, maxDate) + 1;
+                } else { // No tasks, default to a small range
+                    startOffsetDays = 0;
+                    durationDays = 30;
+                }
+            }
             
-            const startOffsetDays = cropTimeline ? calculateDaysDifference(overallStartDate, new Date(startDate)) : 0;
-            const durationDays = cropTimeline ? calculateDaysDifference(new Date(startDate), new Date(endDate)) + 1 : totalDays;
+            startOffsetDays = Math.max(0, startOffsetDays);
+            durationDays = Math.max(1, durationDays);
 
             const cropX_sidebar = 0;
             const cropWidth_sidebar = SIDEBAR_WIDTH * scale;
             const cropX_timeline = (SIDEBAR_WIDTH + (startOffsetDays * DAY_WIDTH)) * scale;
-            const cropWidth_timeline = (durationDays * DAY_WIDTH) * scale;
+            let cropWidth_timeline = (durationDays * DAY_WIDTH) * scale;
+
+            if (cropX_timeline + cropWidth_timeline > sourceCanvas.width) {
+               cropWidth_timeline = sourceCanvas.width - cropX_timeline;
+            }
 
             finalCanvas.width = cropWidth_sidebar + cropWidth_timeline;
             finalCanvas.height = (GANTT_HEADER_HEIGHT * scale) + contentCropHeight;
@@ -1080,13 +1113,10 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
             ctx.fillStyle = 'white';
             ctx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
 
-            // Draw Sidebar Header
-            ctx.drawImage(sourceCanvas, cropX_sidebar, 0, cropWidth_sidebar, GANTT_HEADER_HEIGHT * scale, 0, 0, cropWidth_sidebar, GANTT_HEADER_HEIGHT * scale);
-            // Draw Sidebar Content
-            ctx.drawImage(sourceCanvas, cropX_sidebar, contentCropY, cropWidth_sidebar, contentCropHeight, 0, GANTT_HEADER_HEIGHT * scale, cropWidth_sidebar, contentCropHeight);
-            // Draw Timeline Header
+            // Draw sections from the single source canvas
+            ctx.drawImage(sourceCanvas, 0, 0, cropWidth_sidebar, GANTT_HEADER_HEIGHT * scale, 0, 0, cropWidth_sidebar, GANTT_HEADER_HEIGHT * scale);
             ctx.drawImage(sourceCanvas, cropX_timeline, 0, cropWidth_timeline, GANTT_HEADER_HEIGHT * scale, cropWidth_sidebar, 0, cropWidth_timeline, GANTT_HEADER_HEIGHT * scale);
-            // Draw Timeline Content
+            ctx.drawImage(sourceCanvas, 0, contentCropY, cropWidth_sidebar, contentCropHeight, 0, GANTT_HEADER_HEIGHT * scale, cropWidth_sidebar, contentCropHeight);
             ctx.drawImage(sourceCanvas, cropX_timeline, contentCropY, cropWidth_timeline, contentCropHeight, cropWidth_sidebar, GANTT_HEADER_HEIGHT * scale, cropWidth_timeline, contentCropHeight);
 
             const imgData = finalCanvas.toDataURL('image/jpeg', 0.95);
@@ -1102,6 +1132,9 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
             console.error("Gantt export error:", err);
             setNotification({ message: "Errore durante l'esportazione del Gantt.", type: 'error' });
         } finally {
+            // Restore original state
+            ganttElement.scrollTop = originalScrollTop;
+            ganttElement.scrollLeft = originalScrollLeft;
             stickyElements.forEach(el => {
                 el.style.position = originalPositions.get(el) || '';
             });
@@ -1246,6 +1279,49 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
             container.scrollLeft = Math.max(0, scrollLeft);
         }
     }, [view, todayMarkerPosition]);
+    
+    const handleTaskDragStart = (e, task) => {
+        draggedTaskRef.current = task;
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/html', e.target); // for Firefox
+    };
+
+    const handleTaskDragEnter = (e, task) => {
+        dragOverTaskRef.current = task;
+    };
+
+    const handleTaskDrop = async (e) => {
+        const draggedTask = draggedTaskRef.current;
+        const dragOverTask = dragOverTaskRef.current;
+
+        if (!draggedTask || !dragOverTask || draggedTask.id === dragOverTask.id || draggedTask.projectId !== dragOverTask.projectId) {
+            return;
+        }
+
+        const tasksInProject = tasks.filter(t => t.projectId === draggedTask.projectId).sort((a, b) => (a.order || 0) - (b.order || 0));
+        const fromIndex = tasksInProject.findIndex(t => t.id === draggedTask.id);
+        const toIndex = tasksInProject.findIndex(t => t.id === dragOverTask.id);
+        
+        tasksInProject.splice(fromIndex, 1);
+        tasksInProject.splice(toIndex, 0, draggedTask);
+
+        const batch = writeBatch(db);
+        tasksInProject.forEach((task, index) => {
+            const taskRef = doc(db, `users/${userId}/tasks`, task.id);
+            batch.update(taskRef, { order: index });
+        });
+
+        try {
+            await batch.commit();
+            setNotification({ message: "Ordine attività aggiornato.", type: "success" });
+        } catch (error) {
+            console.error("Errore durante l'aggiornamento dell'ordine:", error);
+            setNotification({ message: "Errore durante l'aggiornamento.", type: "error" });
+        }
+
+        draggedTaskRef.current = null;
+        dragOverTaskRef.current = null;
+    };
 
     return (
         <div className="h-screen w-screen bg-gray-100 flex flex-col font-sans">
@@ -1282,7 +1358,16 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
                                             </div>
                                         </div>
                                         {project.tasks.map(task => (
-                                            <div key={task.id} className="flex items-center group/task p-2 pl-9 border-b border-r bg-gray-50" style={{height: `${ROW_HEIGHT}px`}} onDoubleClick={() => handleEditTask(task)}>
+                                            <div key={task.id} 
+                                                 draggable
+                                                 onDragStart={(e) => handleTaskDragStart(e, task)}
+                                                 onDragEnter={(e) => handleTaskDragEnter(e, task)}
+                                                 onDragEnd={handleTaskDrop}
+                                                 onDragOver={(e) => e.preventDefault()}
+                                                 className="flex items-center group/task p-2 pl-4 border-b border-r bg-gray-50 cursor-grab active:cursor-grabbing" 
+                                                 style={{height: `${ROW_HEIGHT}px`}} 
+                                                 onDoubleClick={() => handleEditTask(task)}>
+                                                 <GripVertical className="flex-shrink-0 text-gray-400 mr-2" size={16} />
                                                 <div className="flex-grow overflow-hidden">
                                                     <p className="font-medium text-gray-900 truncate" onMouseEnter={(e) => handleShowTooltip(e, task.name)} onMouseMove={handleMoveTooltip} onMouseLeave={handleHideTooltip}>
                                                         {task.name}
