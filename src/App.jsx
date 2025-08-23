@@ -5,9 +5,10 @@ import { getFirestore, collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc
 import { ArrowRight, Plus, Users, Trash2, Edit, LayoutDashboard, BarChart3, X, AlertTriangle, FileDown, FileUp, CheckCircle, ClipboardList, StickyNote, LogOut, Percent, Archive, ArchiveRestore } from 'lucide-react';
 
 // --- CONFIGURAZIONE FIREBASE ---
-const firebaseConfigString = import.meta.env.VITE_FIREBASE_CONFIG;
-const firebaseConfig = firebaseConfigString ? JSON.parse(firebaseConfigString) : {
-// INCOLLA QUI LA TUA CONFIGURAZIONE FIREBASE
+const firebaseConfig = (typeof __firebase_config !== 'undefined' && __firebase_config)
+  ? JSON.parse(__firebase_config)
+  : {
+      // INCOLLA QUI LA TUA CONFIGURAZIONE FIREBASE SE __firebase_config NON È DISPONIBILE
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
     authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
     projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
@@ -15,7 +16,7 @@ const firebaseConfig = firebaseConfigString ? JSON.parse(firebaseConfigString) :
     messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
     appId: import.meta.env.VITE_FIREBASE_APP_ID,
     measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
-};
+    };
 
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
@@ -50,6 +51,35 @@ const italianHolidays2025 = {
     '2025-08-15': 'Ferragosto', '2025-11-01': 'Tutti i Santi', '2025-12-08': 'Immacolata Concezione',
     '2025-12-25': 'Natale', '2025-12-26': 'Santo Stefano',
 };
+
+const calculateWorkingDays = (startDate, endDate) => {
+    if (!startDate || !endDate) return 0;
+    let count = 0;
+    const currentDate = new Date(startDate);
+    const lastDate = new Date(endDate);
+    
+    // Normalizza le date per evitare problemi di fuso orario
+    currentDate.setHours(12, 0, 0, 0);
+    lastDate.setHours(12, 0, 0, 0);
+
+    if (currentDate > lastDate) return 0;
+
+    while (currentDate <= lastDate) {
+        const dayOfWeek = currentDate.getDay();
+        const dateString = currentDate.toISOString().split('T')[0];
+
+        // Esclude Sabato (6) e Domenica (0)
+        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+            // Esclude le festività
+            if (!italianHolidays2025[dateString]) {
+                count++;
+            }
+        }
+        currentDate.setDate(currentDate.getDate() + 1);
+    }
+    return count;
+};
+
 
 const checkDateWarning = (date) => {
     if (!date) return null;
@@ -208,13 +238,15 @@ const TaskForm = ({ db, projects, task, resources, allTasks, onDone, selectedPro
     const [notes, setNotes] = useState(task ? task.notes || '' : '');
     const [isRescheduled, setIsRescheduled] = useState(task ? task.isRescheduled || false : false);
     const [rescheduledEndDate, setRescheduledEndDate] = useState(task ? task.rescheduledEndDate || '' : '');
+    const [workingDays, setWorkingDays] = useState(0);
 
     useEffect(() => { if (!task) { setTaskColor(getProjectColor(projectId)); } }, [projectId, task, getProjectColor]);
     
     useEffect(() => {
         const effectiveEndDate = isRescheduled && rescheduledEndDate ? rescheduledEndDate : endDate;
         setDateWarning(checkDateWarning(effectiveEndDate));
-    }, [endDate, rescheduledEndDate, isRescheduled]);
+        setWorkingDays(calculateWorkingDays(startDate, effectiveEndDate));
+    }, [startDate, endDate, rescheduledEndDate, isRescheduled]);
 
     const handleStartDateChange = (date) => { setStartDate(date); const newEndDate = new Date(date); newEndDate.setDate(newEndDate.getDate() + duration - 1); setEndDate(newEndDate.toISOString().split('T')[0]); };
     const handleDurationChange = (value) => { const newDur = parseInt(value, 10); if (newDur > 0) { setDuration(newDur); const newEndDate = new Date(startDate); newEndDate.setDate(newEndDate.getDate() + newDur - 1); setEndDate(newEndDate.toISOString().split('T')[0]); } };
@@ -312,7 +344,16 @@ const TaskForm = ({ db, projects, task, resources, allTasks, onDone, selectedPro
     return (
         <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4"> <div> <label className="block text-sm font-medium text-gray-700">Progetto</label> <select value={projectId} onChange={e => setProjectId(e.target.value)} required disabled={!!task} className="mt-1 block w-full pl-3 pr-10 py-2 border-gray-300 rounded-md disabled:bg-gray-100"> <option value="" disabled>-- Seleziona --</option> {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)} </select> </div> <div> <label className="block text-sm font-medium text-gray-700">Nome Attività</label> <input type="text" value={name} onChange={e => setName(e.target.value)} required className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md" /> </div> </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end"> <div> <label className="block text-sm font-medium">Data Inizio</label> <DatePicker value={startDate} onChange={handleStartDateChange} /> </div> <div> <label className="block text-sm font-medium">Data Fine (Originale)</label> <DatePicker value={endDate} onChange={handleEndDateChange} /> </div> </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                <div> <label className="block text-sm font-medium">Data Inizio</label> <DatePicker value={startDate} onChange={handleStartDateChange} /> </div>
+                <div> <label className="block text-sm font-medium">Data Fine</label> <DatePicker value={endDate} onChange={handleEndDateChange} /> </div>
+                <div>
+                    <label className="block text-sm font-medium text-gray-700">Giorni Lavorativi</label>
+                    <div className="mt-1 flex items-center justify-center w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-md shadow-sm">
+                        <span className="font-semibold text-gray-800">{workingDays}</span>
+                    </div>
+                </div>
+            </div>
             <div> <label className="block text-sm font-medium">Durata (giorni)</label> <div className="flex items-center gap-2"> <input type="range" min="1" max="365" value={duration} onChange={(e) => handleDurationChange(e.target.value)} className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer" /> <input type="number" min="1" max="1000" value={duration} onChange={(e) => handleDurationChange(e.target.value)} className="w-24 px-2 py-1 bg-white border border-gray-300 rounded-md" /></div> </div>
             {dateWarning && <div className="p-2 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 text-sm flex items-center gap-2"> <AlertTriangle size={16}/> {dateWarning}</div>}
             
@@ -429,24 +470,53 @@ const ActivityReportView = ({ projectsWithData, onExportPDF }) => {
         return { overdueTasks, dueTodayTasks, dueInThreeDaysTasks, otherTasks };
     }, [projectsWithData]);
 
-    const renderTaskRow = (task) => ( <tr key={task.id}><td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900"><div className="flex items-center"><span className="w-3 h-3 rounded-full mr-3 flex-shrink-0" style={{backgroundColor: task.projectColor}}></span><span>{task.name}</span></div><div className="text-xs text-gray-500 pl-6">{task.projectName}</div></td><td className="px-4 py-4 whitespace-nowrap text-sm text-gray-600">{new Date(task.effectiveEndDate || task.endDate).toLocaleDateString('it-IT')}</td><td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{task.assigned.map(r => r.details.name).join(', ') || 'N/A'}</td><td className="px-4 py-4 whitespace-nowrap text-sm text-center">{task.duration} gg</td><td className="px-4 py-4 whitespace-nowrap text-sm">{formatCurrency(task.totalEstimatedCost)}<br/><span className="text-xs text-gray-500">({formatCurrency(task.spentCost)})</span></td><td className="px-4 py-4 whitespace-nowrap"><div className="w-full bg-gray-200 rounded-full h-2.5"><div className="bg-blue-600 h-2.5 rounded-full" style={{width: `${task.completionPercentage || 0}%`}}></div></div><span className="text-xs text-gray-500">{task.completionPercentage || 0}%</span></td></tr> );
+    const renderTaskRow = (task) => (
+        <tr key={task.id}>
+            <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                <div className="flex items-center">
+                    <span className="w-3 h-3 rounded-full mr-3 flex-shrink-0" style={{backgroundColor: task.projectColor}}></span>
+                    <span>{task.name}</span>
+                </div>
+                <div className="text-xs text-gray-500 pl-6">{task.projectName}</div>
+            </td>
+            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-600">{new Date(task.effectiveEndDate || task.endDate).toLocaleDateString('it-IT')}</td>
+            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{task.assigned.map(r => r.details.name).join(', ') || 'N/A'}</td>
+            <td className="px-4 py-4 whitespace-nowrap text-sm text-center">{task.duration} gg</td>
+            <td className="px-4 py-4 whitespace-nowrap text-sm text-center">{calculateWorkingDays(task.startDate, task.effectiveEndDate || task.endDate)} gg</td>
+            <td className="px-4 py-4 whitespace-nowrap text-sm">{formatCurrency(task.totalEstimatedCost)}<br/><span className="text-xs text-gray-500">({formatCurrency(task.spentCost)})</span></td>
+            <td className="px-4 py-4 whitespace-nowrap">
+                <div className="w-full bg-gray-200 rounded-full h-2.5"><div className="bg-blue-600 h-2.5 rounded-full" style={{width: `${task.completionPercentage || 0}%`}}></div></div>
+                <span className="text-xs text-gray-500">{task.completionPercentage || 0}%</span>
+            </td>
+        </tr>
+    );
 
     return (
         <div className="p-4 md:p-6 lg:p-8">
             <div className="flex justify-between items-center mb-6"> <h2 className="text-2xl font-bold text-gray-800">Report Attività per Scadenza</h2> <button onClick={onExportPDF} className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 flex items-center gap-2"> <FileDown size={16}/> Esporta PDF </button> </div>
             <div id="activity-report-content" className="bg-white shadow-md rounded-lg overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50"><tr><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Attività / Progetto</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scadenza</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Risorse</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Durata</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Costo Stimato/Sostenuto</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Avanzamento</th></tr></thead>
+                    <thead className="bg-gray-50">
+                        <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Attività / Progetto</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scadenza</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Risorse</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Durata</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Giorni Lavorativi</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Costo Stimato/Sostenuto</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Avanzamento</th>
+                        </tr>
+                    </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                        {reportData.overdueTasks.length > 0 && <tr className="bg-red-200"><td colSpan="6" className="px-4 py-2 text-sm font-bold text-red-800">SCADUTE E NON COMPLETATE</td></tr>}
+                        {reportData.overdueTasks.length > 0 && <tr className="bg-red-200"><td colSpan="7" className="px-4 py-2 text-sm font-bold text-red-800">SCADUTE E NON COMPLETATE</td></tr>}
                         {reportData.overdueTasks.map(renderTaskRow)}
-                        {reportData.dueTodayTasks.length > 0 && <tr className="bg-red-100"><td colSpan="6" className="px-4 py-2 text-sm font-bold text-red-800">IN SCADENZA OGGI</td></tr>}
+                        {reportData.dueTodayTasks.length > 0 && <tr className="bg-red-100"><td colSpan="7" className="px-4 py-2 text-sm font-bold text-red-800">IN SCADENZA OGGI</td></tr>}
                         {reportData.dueTodayTasks.map(renderTaskRow)}
-                        {reportData.dueInThreeDaysTasks.length > 0 && <tr className="bg-yellow-100"><td colSpan="6" className="px-4 py-2 text-sm font-bold text-yellow-800">IN SCADENZA A BREVE (3 GIORNI)</td></tr>}
+                        {reportData.dueInThreeDaysTasks.length > 0 && <tr className="bg-yellow-100"><td colSpan="7" className="px-4 py-2 text-sm font-bold text-yellow-800">IN SCADENZA A BREVE (3 GIORNI)</td></tr>}
                         {reportData.dueInThreeDaysTasks.map(renderTaskRow)}
-                        {reportData.otherTasks.length > 0 && <tr className="bg-gray-100"><td colSpan="6" className="px-4 py-2 text-sm font-bold text-gray-700">ALTRE ATTIVITÀ</td></tr>}
+                        {reportData.otherTasks.length > 0 && <tr className="bg-gray-100"><td colSpan="7" className="px-4 py-2 text-sm font-bold text-gray-700">ALTRE ATTIVITÀ</td></tr>}
                         {reportData.otherTasks.map(renderTaskRow)}
-                        {reportData.overdueTasks.length === 0 && reportData.dueTodayTasks.length === 0 && reportData.dueInThreeDaysTasks.length === 0 && reportData.otherTasks.length === 0 && ( <tr><td colSpan="6" className="px-6 py-4 text-center text-sm text-gray-500">Nessuna attività da mostrare.</td></tr> )}
+                        {reportData.overdueTasks.length === 0 && reportData.dueTodayTasks.length === 0 && reportData.dueInThreeDaysTasks.length === 0 && reportData.otherTasks.length === 0 && ( <tr><td colSpan="7" className="px-6 py-4 text-center text-sm text-gray-500">Nessuna attività da mostrare.</td></tr> )}
                     </tbody>
                 </table>
             </div>
@@ -506,7 +576,7 @@ const AssignmentReportView = ({ projectsWithData, resources, onExportPDF }) => {
                             </tbody>
                         </table>
                     </div>
-                   ))}
+                    ))}
             </div>
         </div>
     );
@@ -1164,7 +1234,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
 
                                                 {/* Main task bar */}
                                                 <div className="absolute flex items-center" style={{ top: `16px`, height: `32px`, left: `${pos.left}px`, width: `${pos.width}px`, pointerEvents: 'auto', zIndex: 10 }}>
-                                                    <div draggable onDragStart={(e) => handleDragStart(e, task, 'move')} onDoubleClick={() => handleEditTask(task)} onMouseEnter={(e) => handleShowTooltip(e, task.notes)} onMouseMove={handleMoveTooltip} onMouseLeave={handleHideTooltip} className={`h-full rounded-md shadow-sm flex items-center w-full group relative cursor-move box-border ${task.isRescheduled ? 'border-2 border-yellow-500' : ''}`} style={{ backgroundColor: task.taskColor || project.color || '#3b82f6' }}>
+                                                    <div draggable onDragStart={(e) => handleDragStart(e, task, 'move')} onDoubleClick={() => handleEditTask(task)} onMouseEnter={(e) => handleShowTooltip(e, task.name)} onMouseMove={handleMoveTooltip} onMouseLeave={handleHideTooltip} className={`h-full rounded-md shadow-sm flex items-center w-full group relative cursor-move box-border ${task.isRescheduled ? 'border-2 border-yellow-500' : ''}`} style={{ backgroundColor: task.taskColor || project.color || '#3b82f6' }}>
                                                         <div className="absolute top-0 left-0 h-full rounded-l-md" style={{width: `${task.completionPercentage || 0}%`, backgroundColor: 'rgba(0,0,0,0.2)'}}></div>
                                                         <div className="relative z-10 flex items-center justify-between w-full px-2">
                                                             <span className={`text-sm truncate font-medium ${getContrastingTextColor(task.taskColor || project.color)}`}>{task.name}</span>
