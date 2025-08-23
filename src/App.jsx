@@ -742,12 +742,72 @@ const ArchivedProjectsView = ({ projects, db, userId, setNotification }) => {
     );
 };
 
+const ExportGanttModal = ({ isOpen, onClose, projects, onExport }) => {
+    const [selectedProjectId, setSelectedProjectId] = useState('all');
+    const [useDateRange, setUseDateRange] = useState(false);
+    const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+    const [endDate, setEndDate] = useState(() => {
+        const d = new Date();
+        d.setMonth(d.getMonth() + 1);
+        return d.toISOString().split('T')[0];
+    });
+
+    const handleExport = () => {
+        onExport({
+            projectId: selectedProjectId,
+            startDate: useDateRange ? startDate : null,
+            endDate: useDateRange ? endDate : null,
+        });
+        onClose();
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Esporta Gantt in JPEG">
+            <div className="space-y-6">
+                <div>
+                    <label className="block text-sm font-medium text-gray-700">Seleziona Progetto da Esportare</label>
+                    <select value={selectedProjectId} onChange={(e) => setSelectedProjectId(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 border-gray-300 rounded-md">
+                        <option value="all">Tutti i Progetti</option>
+                        {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                </div>
+                
+                <div className="space-y-3">
+                    <label className="flex items-center space-x-2 p-2 rounded-md hover:bg-gray-50 cursor-pointer">
+                        <input type="checkbox" checked={useDateRange} onChange={(e) => setUseDateRange(e.target.checked)} className="rounded text-blue-500 h-4 w-4"/>
+                        <span className="font-medium text-gray-700">Limita per intervallo di date</span>
+                    </label>
+                     <p className="text-xs text-gray-500 mt-1 pl-3">Se non selezionato, verrà esportato l'intero orizzonte temporale del progetto.</p>
+                    {useDateRange && (
+                        <div className="p-3 bg-gray-50 border rounded-md animate-fade-in grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-800">Data Inizio</label>
+                                <DatePicker value={startDate} onChange={setStartDate} required />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-800">Data Fine</label>
+                                <DatePicker value={endDate} onChange={setEndDate} required />
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                <div className="flex justify-end pt-4 gap-2">
+                    <button type="button" onClick={onClose} className="bg-gray-300 text-gray-800 px-4 py-2 rounded-md">Annulla</button>
+                    <button type="button" onClick={handleExport} className="bg-blue-600 text-white px-4 py-2 rounded-md">Esporta JPEG</button>
+                </div>
+            </div>
+        </Modal>
+    );
+};
+
 // --- VISTA MASTER ---
 const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notification, setNotification }) => {
     const [view, setView] = useState('gantt'); const [isLoading, setIsLoading] = useState(false); const [loadingMessage, setLoadingMessage] = useState(''); const [isTaskModalOpen, setIsTaskModalOpen] = useState(false); const [isResourceModalOpen, setIsResourceModalOpen] = useState(false); const [isProjectModalOpen, setIsProjectModalOpen] = useState(false); const [editingTask, setEditingTask] = useState(null); const [editingProject, setEditingProject] = useState(null); const [isImportConfirmOpen, setIsImportConfirmOpen] = useState(false); const [importFile, setImportFile] = useState(null); const [selectedProjectId, setSelectedProjectId] = useState(null); const dragInfo = useRef({}); const fileInputRef = useRef(null);
     const [itemToDelete, setItemToDelete] = useState(null);
     const ganttContainerRef = useRef(null);
     const [tooltip, setTooltip] = useState({ visible: false, content: '', x: 0, y: 0 });
+    const [isExportModalOpen, setIsExportModalOpen] = useState(false);
     
     // Filtra i progetti in attivi e archiviati
     const { activeProjects, archivedProjects } = useMemo(() => {
@@ -956,72 +1016,106 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
     
     const importData = async () => { if (!importFile || !userId) return; setIsLoading(true); setLoadingMessage("Importazione in corso..."); const reader = new FileReader(); reader.onload = async (e) => { try { const data = JSON.parse(e.target.result); if (!data.projects || !data.tasks || !data.resources) { throw new Error("Formato file non valido."); } setLoadingMessage("Cancellazione dati esistenti..."); const collectionsToDelete = ['tasks', 'resources', 'projects']; for (const coll of collectionsToDelete) { const userCollRef = collection(db, `users/${userId}/${coll}`); const snapshot = await getDocs(userCollRef); const batch = writeBatch(db); snapshot.docs.forEach(d => batch.delete(d.ref)); await batch.commit(); } setLoadingMessage("Importazione nuovi dati..."); const importBatch = writeBatch(db); data.projects.forEach(p => {const {id, ...rest} = p; importBatch.set(doc(collection(db, `users/${userId}/projects`)), rest)}); data.tasks.forEach(t => {const {id, ...rest} = t; importBatch.set(doc(collection(db, `users/${userId}/tasks`)), rest)}); data.resources.forEach(r => {const {id, ...rest} = r; importBatch.set(doc(collection(db, `users/${userId}/resources`)), rest)}); await importBatch.commit(); setNotification({message: "Importazione completata!", type: "success"}); } catch (error) { console.error("Errore importazione:", error); setNotification({message: `Errore importazione: ${error.message}`, type: "error"}); } finally { setIsLoading(false); setImportFile(null); setIsImportConfirmOpen(false); } }; reader.readAsText(importFile); };
     
-    const exportToFile = (reportType) => {
+    const handleExportGantt = async ({ projectId, startDate, endDate }) => {
+        const ganttElement = ganttContainerRef.current;
+        if (!ganttElement) {
+            setNotification({ message: "Impossibile trovare l'elemento Gantt.", type: 'error' });
+            return;
+        }
+
+        setIsLoading(true);
+        setLoadingMessage(`Preparazione esportazione Gantt...`);
+
+        const stickyElements = ganttElement.querySelectorAll('.sticky');
+        const originalPositions = new Map();
+        stickyElements.forEach(el => {
+            originalPositions.set(el, el.style.position);
+            el.style.position = 'relative'; 
+        });
+
+        await new Promise(resolve => setTimeout(resolve, 250));
+
+        try {
+            const sourceCanvas = await window.html2canvas(ganttElement, {
+                backgroundColor: '#ffffff',
+                useCORS: true,
+                scale: 2,
+                width: ganttElement.scrollWidth,
+                height: ganttElement.scrollHeight,
+                logging: false,
+            });
+
+            setLoadingMessage(`Elaborazione immagine...`);
+
+            const scale = 2;
+            const finalCanvas = document.createElement('canvas');
+            const ctx = finalCanvas.getContext('2d');
+
+            // Determine Y-axis crop (project filtering)
+            const projectToExport = (projectId && projectId !== 'all') ? projectsWithData.find(p => p.id === projectId) : null;
+            const contentCropY = (projectToExport?.projectTop ?? projectsWithData[0]?.projectTop ?? 0) * scale;
+            let contentCropHeight;
+            if (projectToExport) {
+                const projectContentHeight = PROJECT_HEADER_HEIGHT + (projectToExport.tasks.length > 0 ? projectToExport.tasks.length * ROW_HEIGHT : ROW_HEIGHT);
+                contentCropHeight = projectContentHeight * scale;
+            } else {
+                contentCropHeight = (ganttHeight - (projectsWithData[0]?.projectTop ?? 0)) * scale;
+            }
+
+            // Determine X-axis crop (date filtering)
+            const overallStartDate = dateHeaders[0];
+            const cropTimeline = startDate && endDate;
+            
+            const startOffsetDays = cropTimeline ? calculateDaysDifference(overallStartDate, new Date(startDate)) : 0;
+            const durationDays = cropTimeline ? calculateDaysDifference(new Date(startDate), new Date(endDate)) + 1 : totalDays;
+
+            const cropX_sidebar = 0;
+            const cropWidth_sidebar = SIDEBAR_WIDTH * scale;
+            const cropX_timeline = (SIDEBAR_WIDTH + (startOffsetDays * DAY_WIDTH)) * scale;
+            const cropWidth_timeline = (durationDays * DAY_WIDTH) * scale;
+
+            finalCanvas.width = cropWidth_sidebar + cropWidth_timeline;
+            finalCanvas.height = (GANTT_HEADER_HEIGHT * scale) + contentCropHeight;
+            
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
+
+            // Draw Sidebar Header
+            ctx.drawImage(sourceCanvas, cropX_sidebar, 0, cropWidth_sidebar, GANTT_HEADER_HEIGHT * scale, 0, 0, cropWidth_sidebar, GANTT_HEADER_HEIGHT * scale);
+            // Draw Sidebar Content
+            ctx.drawImage(sourceCanvas, cropX_sidebar, contentCropY, cropWidth_sidebar, contentCropHeight, 0, GANTT_HEADER_HEIGHT * scale, cropWidth_sidebar, contentCropHeight);
+            // Draw Timeline Header
+            ctx.drawImage(sourceCanvas, cropX_timeline, 0, cropWidth_timeline, GANTT_HEADER_HEIGHT * scale, cropWidth_sidebar, 0, cropWidth_timeline, GANTT_HEADER_HEIGHT * scale);
+            // Draw Timeline Content
+            ctx.drawImage(sourceCanvas, cropX_timeline, contentCropY, cropWidth_timeline, contentCropHeight, cropWidth_sidebar, GANTT_HEADER_HEIGHT * scale, cropWidth_timeline, contentCropHeight);
+
+            const imgData = finalCanvas.toDataURL('image/jpeg', 0.95);
+            const link = document.createElement('a');
+            link.href = imgData;
+            link.download = `gantt-export-${new Date().toISOString().split('T')[0]}.jpeg`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setNotification({ message: 'Esportazione JPEG completata.', type: 'success' });
+
+        } catch (err) {
+            console.error("Gantt export error:", err);
+            setNotification({ message: "Errore durante l'esportazione del Gantt.", type: 'error' });
+        } finally {
+            stickyElements.forEach(el => {
+                el.style.position = originalPositions.get(el) || '';
+            });
+            setIsLoading(false);
+        }
+    };
+    
+    const handleExportReport = (reportType) => {
         const { jsPDF } = window.jspdf;
-        if (typeof jsPDF === 'undefined' || (reportType === 'gantt' && typeof window.html2canvas === 'undefined')) {
+        if (typeof jsPDF === 'undefined') {
             setNotification({ message: "Libreria di esportazione non caricata. Riprova.", type: "error" });
             return;
         }
-
-        if (reportType === 'gantt') {
-            const ganttElement = ganttContainerRef.current;
-            if (!ganttElement) {
-                setNotification({ message: "Impossibile trovare l'elemento Gantt.", type: 'error' });
-                return;
-            }
-
-            setIsLoading(true);
-            setLoadingMessage(`Generazione Immagine Gantt...`);
-
-            const stickyElements = ganttElement.querySelectorAll('.sticky');
-            const originalPositions = new Map();
-            stickyElements.forEach(el => {
-                originalPositions.set(el, el.style.position);
-                el.style.position = 'relative'; 
-            });
-
-            setTimeout(() => {
-                const captureOptions = {
-                    backgroundColor: '#ffffff',
-                    useCORS: true,
-                    scale: 2, // Aumenta la scala per una risoluzione migliore
-                    width: ganttElement.scrollWidth,
-                    height: ganttElement.scrollHeight,
-                };
-
-                window.html2canvas(ganttElement, captureOptions)
-                    .then(canvas => {
-                        if (canvas.width === 0 || canvas.height === 0) {
-                            setNotification({ message: "La cattura del Gantt ha prodotto un'immagine vuota. Riprova.", type: 'error' });
-                            return;
-                        }
-                        
-                        // Creazione del link per il download del JPEG
-                        const imgData = canvas.toDataURL('image/jpeg', 0.95); // Qualità 95%
-                        const link = document.createElement('a');
-                        link.href = imgData;
-                        link.download = 'gantt-chart.jpeg';
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                        setNotification({ message: 'Esportazione JPEG completata.', type: 'success' });
-
-                    })
-                    .catch((err) => {
-                        console.error("Gantt export error:", err);
-                        setNotification({ message: "Errore durante l'esportazione del Gantt.", type: 'error' });
-                    })
-                    .finally(() => {
-                        stickyElements.forEach(el => {
-                            el.style.position = originalPositions.get(el) || '';
-                        });
-                        setIsLoading(false);
-                    });
-            }, 250);
-            return;
-        }
         
-        // Logica per i report PDF (invariata)
         setIsLoading(true);
         setLoadingMessage(`Generazione PDF ${reportType}...`);
         const convertToHex = (col) => {
@@ -1176,7 +1270,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
                         <div className="grid" style={{ gridTemplateColumns: `${SIDEBAR_WIDTH}px 1fr`, width: `${SIDEBAR_WIDTH + dateHeaders.length * DAY_WIDTH}px` }}>
                             {/* Colonna Sinistra (Sidebar) */}
                             <div className="sticky left-0 z-20 bg-gray-50">
-                                <div className="sticky top-0 z-10 flex items-center justify-between px-4 border-b border-r bg-gray-100" style={{height: `${GANTT_HEADER_HEIGHT}px`}}><span className="font-semibold text-gray-700">Progetti Attivi</span><button onClick={() => exportToFile('gantt')} className="text-blue-600 hover:text-blue-800 p-1"><FileDown size={18}/></button></div>
+                                <div className="sticky top-0 z-10 flex items-center justify-between px-4 border-b border-r bg-gray-100" style={{height: `${GANTT_HEADER_HEIGHT}px`}}><span className="font-semibold text-gray-700">Progetti Attivi</span><button onClick={() => setIsExportModalOpen(true)} className="text-blue-600 hover:text-blue-800 p-1"><FileDown size={18}/></button></div>
                                 {projectsWithData.map(project => (
                                     <div key={project.id} className="group/project">
                                         <div onClick={() => setSelectedProjectId(project.id)} className={`flex items-center justify-between p-2 px-4 cursor-pointer transition-all border-b border-r ${selectedProjectId === project.id ? 'bg-blue-200 border-l-4 border-blue-600' : 'bg-white'}`} style={{height: `${PROJECT_HEADER_HEIGHT}px`}}>
@@ -1301,10 +1395,10 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
                             </div>
                         </div>
                     </div>
-                ) : view === 'costReport' ? ( <CostReportView projectsWithData={projectsWithData} onExportPDF={() => exportToFile('cost')} />
-                ) : view === 'assignmentReport' ? ( <AssignmentReportView projectsWithData={projectsWithData} resources={resources} onExportPDF={() => exportToFile('assignment')} /> )
+                ) : view === 'costReport' ? ( <CostReportView projectsWithData={projectsWithData} onExportPDF={() => handleExportReport('cost')} />
+                ) : view === 'assignmentReport' ? ( <AssignmentReportView projectsWithData={projectsWithData} resources={resources} onExportPDF={() => handleExportReport('assignment')} /> )
                 : view === 'archived' ? ( <ArchivedProjectsView projects={archivedProjects} db={db} userId={userId} setNotification={setNotification} /> )
-                : ( <ActivityReportView projectsWithData={projectsWithData} onExportPDF={() => exportToFile('activity')} /> )
+                : ( <ActivityReportView projectsWithData={projectsWithData} onExportPDF={() => handleExportReport('activity')} /> )
                 }
             </main>
              <Modal isOpen={isTaskModalOpen} onClose={() => {setEditingTask(null); setIsTaskModalOpen(false);}} title={editingTask ? 'Modifica Attività' : 'Nuova Attività'}> <TaskForm db={db} userId={userId} projects={activeProjects} task={editingTask} resources={resources} allTasks={tasks} onDone={() => {setEditingTask(null); setIsTaskModalOpen(false);}} selectedProjectIdForNew={selectedProjectId} /> </Modal>
@@ -1312,6 +1406,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
              <Modal isOpen={isProjectModalOpen} onClose={() => {setEditingProject(null); setIsProjectModalOpen(false);}} title={editingProject && editingProject.id ? 'Modifica Progetto' : 'Nuovo Progetto'}> <ProjectForm project={editingProject} onDone={() => {setEditingProject(null); setIsProjectModalOpen(false);}} db={db} userId={userId} /> </Modal>
              <Modal isOpen={!!itemToDelete} onClose={() => setItemToDelete(null)} title="Conferma Eliminazione"> <div><div className="p-4 bg-red-100 border-l-4 border-red-500 text-red-700"> <p className="font-bold">ATTENZIONE!</p><p>Stai per eliminare {itemToDelete?.type === 'project' ? `il progetto "${itemToDelete.item.name}" e tutte le sue attività` : `l'attività "${itemToDelete?.item.name}"`}. Questa azione è irreversibile.</p></div> <div className="flex justify-end mt-4 gap-2"> <button onClick={() => setItemToDelete(null)} className="bg-gray-300 px-4 py-2 rounded-md">Annulla</button> <button onClick={handleDeleteItem} className="bg-red-600 text-white px-4 py-2 rounded-md">Elimina</button></div></div></Modal>
              <Modal isOpen={isImportConfirmOpen} onClose={() => setIsImportConfirmOpen(false)} title="Conferma Importazione"> <div><div className="p-4 bg-red-100 border-l-4 border-red-500 text-red-700"> <p className="font-bold">ATTENZIONE!</p><p>Stai per sovrascrivere tutti i tuoi dati con il contenuto del file. Questa azione è irreversibile. Sei sicuro?</p></div> <div className="flex justify-end mt-4 gap-2"> <button onClick={() => setIsImportConfirmOpen(false)} className="bg-gray-300 px-4 py-2 rounded-md">Annulla</button> <button onClick={importData} className="bg-red-600 text-white px-4 py-2 rounded-md">Sì, sovrascrivi</button></div></div></Modal>
+             <ExportGanttModal isOpen={isExportModalOpen} onClose={() => setIsExportModalOpen(false)} projects={activeProjects} onExport={handleExportGantt} />
         </div>
     );
 };
