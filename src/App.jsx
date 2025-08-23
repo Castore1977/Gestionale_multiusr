@@ -1190,7 +1190,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
                                         {project.tasks.map(task => (
                                             <div key={task.id} className="flex items-center group/task p-2 pl-9 border-b border-r bg-gray-50" style={{height: `${ROW_HEIGHT}px`}} onDoubleClick={() => handleEditTask(task)}>
                                                 <div className="flex-grow overflow-hidden">
-                                                    <p className="font-medium text-gray-900 truncate">
+                                                    <p className="font-medium text-gray-900 truncate" onMouseEnter={(e) => handleShowTooltip(e, task.name)} onMouseMove={handleMoveTooltip} onMouseLeave={handleHideTooltip}>
                                                         {task.name}
                                                         <span className={`ml-1 font-normal ${task.completionPercentage >= 100 ? 'text-green-600' : 'text-gray-500'}`}>
                                                             ({task.completionPercentage || 0}%)
@@ -1234,7 +1234,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
 
                                                 {/* Main task bar */}
                                                 <div className="absolute flex items-center" style={{ top: `16px`, height: `32px`, left: `${pos.left}px`, width: `${pos.width}px`, pointerEvents: 'auto', zIndex: 10 }}>
-                                                    <div draggable onDragStart={(e) => handleDragStart(e, task, 'move')} onDoubleClick={() => handleEditTask(task)} onMouseEnter={(e) => handleShowTooltip(e, task.name)} onMouseMove={handleMoveTooltip} onMouseLeave={handleHideTooltip} className={`h-full rounded-md shadow-sm flex items-center w-full group relative cursor-move box-border ${task.isRescheduled ? 'border-2 border-yellow-500' : ''}`} style={{ backgroundColor: task.taskColor || project.color || '#3b82f6' }}>
+                                                    <div draggable onDragStart={(e) => handleDragStart(e, task, 'move')} onDoubleClick={() => handleEditTask(task)} onMouseEnter={(e) => handleShowTooltip(e, task.notes)} onMouseMove={handleMoveTooltip} onMouseLeave={handleHideTooltip} className={`h-full rounded-md shadow-sm flex items-center w-full group relative cursor-move box-border ${task.isRescheduled ? 'border-2 border-yellow-500' : ''}`} style={{ backgroundColor: task.taskColor || project.color || '#3b82f6' }}>
                                                         <div className="absolute top-0 left-0 h-full rounded-l-md" style={{width: `${task.completionPercentage || 0}%`, backgroundColor: 'rgba(0,0,0,0.2)'}}></div>
                                                         <div className="relative z-10 flex items-center justify-between w-full px-2">
                                                             <span className={`text-sm truncate font-medium ${getContrastingTextColor(task.taskColor || project.color)}`}>{task.name}</span>
