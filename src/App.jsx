@@ -762,7 +762,7 @@ const ExportGanttModal = ({ isOpen, onClose, projects, onExport }) => {
     };
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Esporta Gantt in JPEG">
+        <Modal isOpen={isOpen} onClose={onClose} title="Esporta Gantt per la Stampa">
             <div className="space-y-6">
                 <div>
                     <label className="block text-sm font-medium text-gray-700">Seleziona Progetto da Esportare</label>
@@ -794,7 +794,7 @@ const ExportGanttModal = ({ isOpen, onClose, projects, onExport }) => {
 
                 <div className="flex justify-end pt-4 gap-2">
                     <button type="button" onClick={onClose} className="bg-gray-300 text-gray-800 px-4 py-2 rounded-md">Annulla</button>
-                    <button type="button" onClick={handleExport} className="bg-blue-600 text-white px-4 py-2 rounded-md">Esporta JPEG</button>
+                    <button type="button" onClick={handleExport} className="bg-blue-600 text-white px-4 py-2 rounded-md">Crea Anteprima</button>
                 </div>
             </div>
         </Modal>
@@ -1018,126 +1018,224 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
     
     const importData = async () => { if (!importFile || !userId) return; setIsLoading(true); setLoadingMessage("Importazione in corso..."); const reader = new FileReader(); reader.onload = async (e) => { try { const data = JSON.parse(e.target.result); if (!data.projects || !data.tasks || !data.resources) { throw new Error("Formato file non valido."); } setLoadingMessage("Cancellazione dati esistenti..."); const collectionsToDelete = ['tasks', 'resources', 'projects']; for (const coll of collectionsToDelete) { const userCollRef = collection(db, `users/${userId}/${coll}`); const snapshot = await getDocs(userCollRef); const batch = writeBatch(db); snapshot.docs.forEach(d => batch.delete(d.ref)); await batch.commit(); } setLoadingMessage("Importazione nuovi dati..."); const importBatch = writeBatch(db); data.projects.forEach(p => {const {id, ...rest} = p; importBatch.set(doc(collection(db, `users/${userId}/projects`)), rest)}); data.tasks.forEach(t => {const {id, ...rest} = t; importBatch.set(doc(collection(db, `users/${userId}/tasks`)), rest)}); data.resources.forEach(r => {const {id, ...rest} = r; importBatch.set(doc(collection(db, `users/${userId}/resources`)), rest)}); await importBatch.commit(); setNotification({message: "Importazione completata!", type: "success"}); } catch (error) { console.error("Errore importazione:", error); setNotification({message: `Errore importazione: ${error.message}`, type: "error"}); } finally { setIsLoading(false); setImportFile(null); setIsImportConfirmOpen(false); } }; reader.readAsText(importFile); };
     
-    const handleExportGantt = async ({ projectId, startDate, endDate }) => {
-        const ganttElement = ganttContainerRef.current;
-        if (!ganttElement) {
-            setNotification({ message: "Impossibile trovare l'elemento Gantt.", type: 'error' });
-            return;
-        }
-
+    const handleExportGantt = ({ projectId, startDate, endDate }) => {
+        setLoadingMessage('Generazione anteprima di stampa...');
         setIsLoading(true);
-        setLoadingMessage(`Preparazione esportazione Gantt...`);
 
-        // Reset scroll position to ensure consistent capture
-        const originalScrollTop = ganttElement.scrollTop;
-        const originalScrollLeft = ganttElement.scrollLeft;
-        ganttElement.scrollTop = 0;
-        ganttElement.scrollLeft = 0;
+        const generateGanttExportHTML = (exportData) => {
+            const {
+                projectsToRender,
+                dateHeaders,
+                monthHeaders,
+                taskPositions,
+                arrowPaths,
+                ganttHeight,
+                ganttWidth,
+                todayMarkerPosition
+            } = exportData;
 
-        const stickyElements = ganttElement.querySelectorAll('.sticky');
-        const originalPositions = new Map();
-        stickyElements.forEach(el => {
-            originalPositions.set(el, el.style.position);
-            el.style.position = 'relative'; 
-        });
+            const sidebarHTML = projectsToRender.map(p => `
+                <div class="group/project">
+                    <div class="flex items-center justify-between p-2 px-4 bg-white" style="height: ${PROJECT_HEADER_HEIGHT}px; border-bottom: 1px solid #e5e7eb; border-right: 1px solid #e5e7eb;">
+                        <div class="flex items-center gap-3 flex-grow overflow-hidden">
+                            <span class="w-4 h-4 rounded-full flex-shrink-0" style="background-color: ${p.color};"></span>
+                            <div class="flex-grow overflow-hidden">
+                                <h3 class="font-bold text-gray-800 truncate">${p.name}</h3>
+                            </div>
+                        </div>
+                    </div>
+                    ${p.tasks.map(t => `
+                        <div class="flex items-center p-2 pl-4 bg-gray-50" style="height: ${ROW_HEIGHT}px; border-bottom: 1px solid #e5e7eb; border-right: 1px solid #e5e7eb;">
+                            <div class="flex-grow overflow-hidden">
+                                <p class="font-medium text-gray-900 truncate">${t.name}</p>
+                            </div>
+                        </div>
+                    `).join('')}
+                    ${p.tasks.length === 0 ? `<div class="pl-9 text-xs text-gray-500 italic h-full flex items-center" style="height: ${ROW_HEIGHT}px; border-bottom: 1px solid #e5e7eb; border-right: 1px solid #e5e7eb;">Nessuna attività.</div>` : ''}
+                </div>
+            `).join('');
 
-        // Allow the DOM to update before capturing
-        await new Promise(resolve => setTimeout(resolve, 300));
+            const timelineHTML = projectsToRender.flatMap(p => p.tasks).map(task => {
+                const pos = taskPositions.get(task.id);
+                if (!pos) return '';
+                const textColor = getContrastingTextColor(task.taskColor || task.projectColor);
+                return `
+                    <div class="absolute flex items-center" style="top: ${pos.top + 16}px; left: ${pos.left}px; width: ${pos.width}px; height: 32px; z-index: 10;">
+                        <div class="h-full rounded-md shadow-sm flex items-center w-full relative" style="background-color: ${task.taskColor || task.projectColor};">
+                            <div class="absolute top-0 left-0 h-full rounded-l-md" style="width: ${task.completionPercentage || 0}%; background-color: rgba(0,0,0,0.2);"></div>
+                            <span class="relative z-10 text-sm truncate font-medium px-2 ${textColor}">${task.name}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            return `
+                <!DOCTYPE html>
+                <html lang="it">
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>Gantt Export</title>
+                    <script src="https://cdn.tailwindcss.com"></script>
+                    <style>
+                        body { font-family: sans-serif; background-color: #f9fafb; }
+                        @media print {
+                            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                        }
+                    </style>
+                </head>
+                <body class="p-4">
+                    <h1 class="text-2xl font-bold mb-4">Gantt - ${new Date().toLocaleDateString('it-IT')}</h1>
+                    <div class="grid shadow-lg border border-gray-200" style="grid-template-columns: ${SIDEBAR_WIDTH}px 1fr; width: ${ganttWidth}px; min-width: 100%;">
+                        <!-- Sidebar -->
+                        <div class="bg-gray-50" style="z-index: 20;">
+                            <div class="flex items-center justify-between px-4 bg-gray-100" style="height: ${GANTT_HEADER_HEIGHT}px; border-bottom: 1px solid #e5e7eb; border-right: 1px solid #e5e7eb;">
+                                <span class="font-semibold text-gray-700">Progetti</span>
+                            </div>
+                            ${sidebarHTML}
+                        </div>
+                        <!-- Timeline -->
+                        <div class="relative overflow-x-auto">
+                            <div class="bg-white" style="height: ${GANTT_HEADER_HEIGHT}px; border-bottom: 1px solid #e5e7eb;">
+                                <div class="flex border-b">
+                                    ${monthHeaders.map(m => `<div class="flex-shrink-0 text-center font-semibold text-gray-600 border-r" style="width: ${m.days * DAY_WIDTH}px;">${m.name}</div>`).join('')}
+                                </div>
+                                <div class="flex">
+                                    ${dateHeaders.map(d => {
+                                        const isToday = d.toDateString() === new Date().toDateString();
+                                        return `<div class="w-10 text-center border-r flex-shrink-0 flex flex-col justify-center ${isToday ? 'bg-red-200' : 'bg-gray-50'}" style="height: 48px;">
+                                                    <div class="text-xs ${d.getDay() === 0 || d.getDay() === 6 ? 'text-red-500' : 'text-gray-500'}">${['D', 'L', 'M', 'M', 'G', 'V', 'S'][d.getDay()]}</div>
+                                                    <div class="text-sm font-semibold ${isToday ? 'text-red-600' : 'text-gray-800'}">${d.getDate()}</div>
+                                                </div>`
+                                    }).join('')}
+                                </div>
+                            </div>
+                            <div class="relative" style="height: ${ganttHeight}px;">
+                                ${todayMarkerPosition >= 0 ? `<div class="absolute top-0 h-full w-0.5 bg-red-500 opacity-75 z-20" style="left: ${todayMarkerPosition}px;"></div>` : ''}
+                                ${timelineHTML}
+                                <svg width="100%" height="100%" class="absolute top-0 left-0 z-10 pointer-events-none">
+                                    <defs><marker id="arrowhead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#0ea5e9" /></marker></defs>
+                                    ${arrowPaths.map(p => `<path d="${p.d}" stroke="#0ea5e9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />`).join('')}
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                </body>
+                </html>
+            `;
+        };
 
         try {
-            const sourceCanvas = await window.html2canvas(ganttElement, {
-                backgroundColor: '#ffffff',
-                useCORS: true,
-                scale: 2,
-                width: ganttElement.scrollWidth,
-                height: ganttElement.scrollHeight,
-                logging: false,
-            });
+            // 1. Filter projects and tasks
+            const projectsToExport = projectId === 'all'
+                ? projectsWithData
+                : projectsWithData.filter(p => p.id === projectId);
+            
+            const tasksToExport = projectsToExport.flatMap(p => p.tasks);
 
-            setLoadingMessage(`Elaborazione immagine...`);
-
-            const scale = 2;
-            const finalCanvas = document.createElement('canvas');
-            const ctx = finalCanvas.getContext('2d');
-
-            // Determine Y-axis crop (project filtering)
-            const projectToExport = (projectId && projectId !== 'all') ? projectsWithData.find(p => p.id === projectId) : null;
-            let contentCropY;
-            let contentCropHeight;
-
-            if (projectToExport) {
-                contentCropY = projectToExport.projectTop * scale;
-                const projectContentHeight = PROJECT_HEADER_HEIGHT + (projectToExport.tasks.length > 0 ? projectToExport.tasks.length * ROW_HEIGHT : ROW_HEIGHT);
-                contentCropHeight = projectContentHeight * scale;
-            } else { // All projects
-                const firstProjectY = projectsWithData.length > 0 ? projectsWithData[0].projectTop : 0;
-                contentCropY = firstProjectY * scale;
-                contentCropHeight = (ganttHeight - firstProjectY) * scale;
-            }
-
-            // Determine X-axis crop (date filtering)
-            const ganttStartDate = dateHeaders[0];
-            let startOffsetDays, durationDays;
-
-            if (startDate && endDate) { // Date range is specified
-                startOffsetDays = calculateDaysDifference(ganttStartDate, new Date(startDate));
-                durationDays = calculateDaysDifference(new Date(startDate), new Date(endDate)) + 1;
-            } else { // Auto-calculate tightest date range for selected project(s)
-                const tasksToConsider = projectToExport ? projectToExport.tasks : tasks;
-                if (tasksToConsider.length > 0) {
-                    const minDate = new Date(Math.min(...tasksToConsider.map(t => new Date(t.startDate))));
-                    const maxDate = new Date(Math.max(...tasksToConsider.map(t => new Date(t.effectiveEndDate || t.endDate))));
-                    startOffsetDays = calculateDaysDifference(ganttStartDate, minDate);
-                    durationDays = calculateDaysDifference(minDate, maxDate) + 1;
-                } else { // No tasks, default to a small range
-                    startOffsetDays = 0;
-                    durationDays = 30;
+            // 2. Determine date range
+            let finalStartDate, finalEndDate;
+            if (startDate && endDate) {
+                finalStartDate = new Date(startDate);
+                finalEndDate = new Date(endDate);
+            } else {
+                if (tasksToExport.length === 0) {
+                    finalStartDate = new Date();
+                    finalEndDate = new Date();
+                    finalEndDate.setDate(finalStartDate.getDate() + 30);
+                } else {
+                    const allDates = tasksToExport.flatMap(t => [new Date(t.startDate), new Date(t.effectiveEndDate || t.endDate)]).filter(Boolean);
+                    finalStartDate = new Date(Math.min(...allDates));
+                    finalEndDate = new Date(Math.max(...allDates));
                 }
             }
-            
-            startOffsetDays = Math.max(0, startOffsetDays);
-            durationDays = Math.max(1, durationDays);
+            finalStartDate.setHours(0, 0, 0, 0);
+            finalEndDate.setHours(0, 0, 0, 0);
 
-            const cropX_sidebar = 0;
-            const cropWidth_sidebar = SIDEBAR_WIDTH * scale;
-            const cropX_timeline = (SIDEBAR_WIDTH + (startOffsetDays * DAY_WIDTH)) * scale;
-            let cropWidth_timeline = (durationDays * DAY_WIDTH) * scale;
-
-            if (cropX_timeline + cropWidth_timeline > sourceCanvas.width) {
-               cropWidth_timeline = sourceCanvas.width - cropX_timeline;
+            // 3. Generate data for rendering
+            const exportDateHeaders = [];
+            let currentDate = new Date(finalStartDate);
+            while(currentDate <= finalEndDate) {
+                exportDateHeaders.push(new Date(currentDate));
+                currentDate.setDate(currentDate.getDate() + 1);
             }
 
-            finalCanvas.width = cropWidth_sidebar + cropWidth_timeline;
-            finalCanvas.height = (GANTT_HEADER_HEIGHT * scale) + contentCropHeight;
-            
-            ctx.fillStyle = 'white';
-            ctx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
+            const exportMonthHeaders = [];
+            if (exportDateHeaders.length > 0) {
+                let currentMonth = -1;
+                exportDateHeaders.forEach(date => {
+                    const month = date.getMonth();
+                    if (month !== currentMonth) {
+                        currentMonth = month;
+                        exportMonthHeaders.push({ name: date.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' }), days: 0 });
+                    }
+                    exportMonthHeaders[exportMonthHeaders.length - 1].days++;
+                });
+            }
 
-            // Draw sections from the single source canvas
-            ctx.drawImage(sourceCanvas, 0, 0, cropWidth_sidebar, GANTT_HEADER_HEIGHT * scale, 0, 0, cropWidth_sidebar, GANTT_HEADER_HEIGHT * scale);
-            ctx.drawImage(sourceCanvas, cropX_timeline, 0, cropWidth_timeline, GANTT_HEADER_HEIGHT * scale, cropWidth_sidebar, 0, cropWidth_timeline, GANTT_HEADER_HEIGHT * scale);
-            ctx.drawImage(sourceCanvas, 0, contentCropY, cropWidth_sidebar, contentCropHeight, 0, GANTT_HEADER_HEIGHT * scale, cropWidth_sidebar, contentCropHeight);
-            ctx.drawImage(sourceCanvas, cropX_timeline, contentCropY, cropWidth_timeline, contentCropHeight, cropWidth_sidebar, GANTT_HEADER_HEIGHT * scale, cropWidth_timeline, contentCropHeight);
-
-            const imgData = finalCanvas.toDataURL('image/jpeg', 0.95);
-            const link = document.createElement('a');
-            link.href = imgData;
-            link.download = `gantt-export-${new Date().toISOString().split('T')[0]}.jpeg`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            setNotification({ message: 'Esportazione JPEG completata.', type: 'success' });
-
-        } catch (err) {
-            console.error("Gantt export error:", err);
-            setNotification({ message: "Errore durante l'esportazione del Gantt.", type: 'error' });
-        } finally {
-            // Restore original state
-            ganttElement.scrollTop = originalScrollTop;
-            ganttElement.scrollLeft = originalScrollLeft;
-            stickyElements.forEach(el => {
-                el.style.position = originalPositions.get(el) || '';
+            let currentY = 0;
+            const exportTaskPositions = new Map();
+            const projectsToRender = projectsToExport.map(p => {
+                currentY += PROJECT_HEADER_HEIGHT;
+                const tasksWithPositions = p.tasks.map(t => {
+                    const left = calculateDaysDifference(exportDateHeaders[0], t.startDate) * DAY_WIDTH;
+                    const width = t.duration * DAY_WIDTH;
+                    exportTaskPositions.set(t.id, { top: currentY, left, width });
+                    const taskWithProjectColor = {...t, projectColor: p.color};
+                    currentY += ROW_HEIGHT;
+                    return taskWithProjectColor;
+                });
+                if (p.tasks.length === 0) { currentY += ROW_HEIGHT; }
+                return {...p, tasks: tasksWithPositions};
             });
+            
+            const exportArrowPaths = [];
+            tasksToExport.forEach(task => {
+                if (task.dependencies && task.dependencies.length > 0) {
+                    const successorPos = exportTaskPositions.get(task.id);
+                    if (!successorPos) return;
+                    task.dependencies.forEach(predecessorId => {
+                        const predecessorPos = exportTaskPositions.get(predecessorId);
+                        if (!predecessorPos) return;
+                        const startX = predecessorPos.left + predecessorPos.width; const startY = predecessorPos.top + (ROW_HEIGHT / 2);
+                        const endX = successorPos.left; const endY = successorPos.top + (ROW_HEIGHT / 2);
+                        const path = `M ${startX} ${startY} L ${startX + DAY_WIDTH / 2} ${startY} L ${startX + DAY_WIDTH / 2} ${endY} L ${endX} ${endY}`;
+                        exportArrowPaths.push({id: `${predecessorId}-${task.id}`, d: path});
+                    });
+                }
+            });
+            
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            const todayMarkerPosition = calculateDaysDifference(exportDateHeaders[0], today) * DAY_WIDTH;
+
+
+            const exportData = {
+                projectsToRender,
+                dateHeaders: exportDateHeaders,
+                monthHeaders: exportMonthHeaders,
+                taskPositions: exportTaskPositions,
+                arrowPaths: exportArrowPaths,
+                ganttHeight: currentY,
+                ganttWidth: SIDEBAR_WIDTH + exportDateHeaders.length * DAY_WIDTH,
+                todayMarkerPosition
+            };
+
+            const htmlContent = generateGanttExportHTML(exportData);
+            
+            const newWindow = window.open('', '_blank');
+            if (newWindow) {
+                newWindow.document.open();
+                newWindow.document.write(htmlContent);
+                newWindow.document.close();
+                setNotification({ message: 'Anteprima di stampa generata in una nuova scheda.', type: 'success' });
+            } else {
+                setNotification({ message: 'Impossibile aprire una nuova scheda. Controlla i permessi del browser.', type: 'error' });
+            }
+        } catch(error) {
+            console.error("Errore durante la generazione dell'anteprima Gantt:", error);
+            setNotification({ message: "Si è verificato un errore imprevisto.", type: 'error' });
+        } finally {
             setIsLoading(false);
         }
     };
@@ -1346,7 +1444,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
                         <div className="grid" style={{ gridTemplateColumns: `${SIDEBAR_WIDTH}px 1fr`, width: `${SIDEBAR_WIDTH + dateHeaders.length * DAY_WIDTH}px` }}>
                             {/* Colonna Sinistra (Sidebar) */}
                             <div className="sticky left-0 z-20 bg-gray-50">
-                                <div className="sticky top-0 z-10 flex items-center justify-between px-4 border-b border-r bg-gray-100" style={{height: `${GANTT_HEADER_HEIGHT}px`}}><span className="font-semibold text-gray-700">Progetti Attivi</span><button onClick={() => setIsExportModalOpen(true)} className="text-blue-600 hover:text-blue-800 p-1"><FileDown size={18}/></button></div>
+                                <div className="sticky top-0 z-10 flex items-center justify-between px-4 border-b border-r bg-gray-100" style={{height: `${GANTT_HEADER_HEIGHT}px`}}><span className="font-semibold text-gray-700">Progetti Attivi</span><button onClick={() => setIsExportModalOpen(true)} className="text-blue-600 hover:text-blue-800 p-1" title="Esporta Gantt per la stampa"><FileDown size={18}/></button></div>
                                 {projectsWithData.map(project => (
                                     <div key={project.id} className="group/project">
                                         <div onClick={() => setSelectedProjectId(project.id)} className={`flex items-center justify-between p-2 px-4 cursor-pointer transition-all border-b border-r ${selectedProjectId === project.id ? 'bg-blue-200 border-l-4 border-blue-600' : 'bg-white'}`} style={{height: `${PROJECT_HEADER_HEIGHT}px`}}>
@@ -1367,7 +1465,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
                                                  className="flex items-center group/task p-2 pl-4 border-b border-r bg-gray-50 cursor-grab active:cursor-grabbing" 
                                                  style={{height: `${ROW_HEIGHT}px`}} 
                                                  onDoubleClick={() => handleEditTask(task)}>
-                                                 <GripVertical className="flex-shrink-0 text-gray-400 mr-2" size={16} />
+                                                <GripVertical className="flex-shrink-0 text-gray-400 mr-2" size={16} />
                                                 <div className="flex-grow overflow-hidden">
                                                     <p className="font-medium text-gray-900 truncate" onMouseEnter={(e) => handleShowTooltip(e, task.name)} onMouseMove={handleMoveTooltip} onMouseLeave={handleHideTooltip}>
                                                         {task.name}
@@ -1575,7 +1673,7 @@ export default function App() {
     
     useEffect(() => {
         // Carica dinamicamente gli script per la generazione di PDF
-        const scripts = [ { id: 'jspdf', src: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js' }, { id: 'jspdf-autotable', src: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js' }, { id: 'html2canvas', src: 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js' } ];
+        const scripts = [ { id: 'jspdf', src: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js' }, { id: 'jspdf-autotable', src: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js' }];
         scripts.forEach(scriptInfo => { if (!document.getElementById(scriptInfo.id)) { const script = document.createElement('script'); script.id = scriptInfo.id; script.src = scriptInfo.src; script.async = false; document.head.appendChild(script); } });
         
         try { 
