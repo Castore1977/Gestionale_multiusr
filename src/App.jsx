@@ -239,6 +239,7 @@ const TaskForm = ({ db, projects, task, resources, allTasks, onDone, selectedPro
     const [isRescheduled, setIsRescheduled] = useState(task ? task.isRescheduled || false : false);
     const [rescheduledEndDate, setRescheduledEndDate] = useState(task ? task.rescheduledEndDate || '' : '');
     const [workingDays, setWorkingDays] = useState(0);
+    const [isMilestone, setIsMilestone] = useState(task ? task.isMilestone || false : false);
 
     useEffect(() => { if (!task) { setTaskColor(getProjectColor(projectId)); } }, [projectId, task, getProjectColor]);
     
@@ -248,9 +249,47 @@ const TaskForm = ({ db, projects, task, resources, allTasks, onDone, selectedPro
         setWorkingDays(calculateWorkingDays(startDate, effectiveEndDate));
     }, [startDate, endDate, rescheduledEndDate, isRescheduled]);
 
-    const handleStartDateChange = (date) => { setStartDate(date); const newEndDate = new Date(date); newEndDate.setDate(newEndDate.getDate() + duration - 1); setEndDate(newEndDate.toISOString().split('T')[0]); };
-    const handleDurationChange = (value) => { const newDur = parseInt(value, 10); if (newDur > 0) { setDuration(newDur); const newEndDate = new Date(startDate); newEndDate.setDate(newEndDate.getDate() + newDur - 1); setEndDate(newEndDate.toISOString().split('T')[0]); } };
-    const handleEndDateChange = (date) => { setEndDate(date); const newDuration = calculateDaysDifference(startDate, date) + 1; if (newDuration > 0) { setDuration(newDuration); } };
+    useEffect(() => {
+        if (isMilestone) {
+            setDuration(1);
+            setEndDate(startDate);
+        }
+    }, [isMilestone, startDate]);
+
+    const handleStartDateChange = (date) => {
+        setStartDate(date);
+        if (isMilestone) {
+            setEndDate(date);
+        } else {
+            const newEndDate = new Date(date);
+            newEndDate.setDate(newEndDate.getDate() + duration - 1);
+            setEndDate(newEndDate.toISOString().split('T')[0]);
+        }
+    };
+
+    const handleDurationChange = (value) => {
+        const newDur = parseInt(value, 10);
+        if (newDur > 0) {
+            setDuration(newDur);
+            const newEndDate = new Date(startDate);
+            newEndDate.setDate(newEndDate.getDate() + newDur - 1);
+            setEndDate(newEndDate.toISOString().split('T')[0]);
+            if (isMilestone && newDur !== 1) {
+                setIsMilestone(false);
+            }
+        }
+    };
+
+    const handleEndDateChange = (date) => {
+        setEndDate(date);
+        const newDuration = calculateDaysDifference(startDate, date) + 1;
+        if (newDuration > 0) {
+            setDuration(newDuration);
+        }
+        if (isMilestone && startDate !== date) {
+            setIsMilestone(false);
+        }
+    };
     
     useEffect(() => {
         if (dependencies?.length > 0 && allTasks.length > 0) {
@@ -294,6 +333,7 @@ const TaskForm = ({ db, projects, task, resources, allTasks, onDone, selectedPro
             notes,
             isRescheduled,
             rescheduledEndDate: isRescheduled ? rescheduledEndDate : '',
+            isMilestone,
         };
 
         try {
@@ -346,7 +386,7 @@ const TaskForm = ({ db, projects, task, resources, allTasks, onDone, selectedPro
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4"> <div> <label className="block text-sm font-medium text-gray-700">Progetto</label> <select value={projectId} onChange={e => setProjectId(e.target.value)} required disabled={!!task} className="mt-1 block w-full pl-3 pr-10 py-2 border-gray-300 rounded-md disabled:bg-gray-100"> <option value="" disabled>-- Seleziona --</option> {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)} </select> </div> <div> <label className="block text-sm font-medium text-gray-700">Nome Attività</label> <input type="text" value={name} onChange={e => setName(e.target.value)} required className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md" /> </div> </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                 <div> <label className="block text-sm font-medium">Data Inizio</label> <DatePicker value={startDate} onChange={handleStartDateChange} /> </div>
-                <div> <label className="block text-sm font-medium">Data Fine</label> <DatePicker value={endDate} onChange={handleEndDateChange} /> </div>
+                <div> <label className="block text-sm font-medium">Data Fine</label> <DatePicker value={endDate} onChange={handleEndDateChange} disabled={isMilestone} /> </div>
                 <div>
                     <label className="block text-sm font-medium text-gray-700">Giorni Lavorativi</label>
                     <div className="mt-1 flex items-center justify-center w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-md shadow-sm">
@@ -354,7 +394,18 @@ const TaskForm = ({ db, projects, task, resources, allTasks, onDone, selectedPro
                     </div>
                 </div>
             </div>
-            <div> <label className="block text-sm font-medium">Durata (giorni)</label> <div className="flex items-center gap-2"> <input type="range" min="1" max="365" value={duration} onChange={(e) => handleDurationChange(e.target.value)} className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer" /> <input type="number" min="1" max="1000" value={duration} onChange={(e) => handleDurationChange(e.target.value)} className="w-24 px-2 py-1 bg-white border border-gray-300 rounded-md" /></div> </div>
+            <div className="pt-2">
+                <label className="flex items-center space-x-3 p-3 rounded-md border hover:bg-gray-50 cursor-pointer">
+                    <input
+                        type="checkbox"
+                        checked={isMilestone}
+                        onChange={(e) => setIsMilestone(e.target.checked)}
+                        className="h-5 w-5 rounded text-purple-600 focus:ring-purple-500"
+                    />
+                    <span className="text-sm font-medium text-gray-700">Milestone (attività di un giorno)</span>
+                </label>
+            </div>
+            <div> <label className="block text-sm font-medium">Durata (giorni)</label> <div className="flex items-center gap-2"> <input type="range" min="1" max="365" value={duration} onChange={(e) => handleDurationChange(e.target.value)} className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer" disabled={isMilestone} /> <input type="number" min="1" max="1000" value={duration} onChange={(e) => handleDurationChange(e.target.value)} className="w-24 px-2 py-1 bg-white border border-gray-300 rounded-md" disabled={isMilestone} /></div> </div>
             {dateWarning && <div className="p-2 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 text-sm flex items-center gap-2"> <AlertTriangle size={16}/> {dateWarning}</div>}
             
             <div className="space-y-3">
@@ -1072,6 +1123,15 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
                 const pos = taskPositions.get(task.id);
                 if (!pos) return '';
                 const textColor = getContrastingTextColor(task.taskColor || task.projectColor);
+
+                if (task.isMilestone) {
+                    return `
+                        <div class="absolute w-full h-full flex items-center justify-center" style="top: ${pos.top}px; left: ${pos.left}px; width: ${pos.width}px; height: ${ROW_HEIGHT}px; z-index: 10;" title="${task.name}">
+                           <div class="w-6 h-6 transform rotate-45 shadow-lg" style="background-color: ${task.taskColor || task.projectColor};"></div>
+                        </div>
+                    `;
+                }
+
                 return `
                     <div class="absolute flex items-center" style="top: ${pos.top + 16}px; left: ${pos.left}px; width: ${pos.width}px; height: 32px; z-index: 10;">
                         <div class="h-full rounded-md shadow-sm flex items-center w-full relative" style="background-color: ${task.taskColor || task.projectColor};">
@@ -1525,17 +1585,34 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
                                         return (
                                             <div key={task.id} className="absolute" style={{ top: `${pos.top}px`, height: `${ROW_HEIGHT}px`, left: '0px', width: '100%', pointerEvents: 'none' }}>
 
-                                                {/* Main task bar */}
+                                                {/* Main task bar container */}
                                                 <div className="absolute flex items-center" style={{ top: `16px`, height: `32px`, left: `${pos.left}px`, width: `${pos.width}px`, pointerEvents: 'auto', zIndex: 10 }}>
-                                                    <div draggable onDragStart={(e) => handleDragStart(e, task, 'move')} onDoubleClick={() => handleEditTask(task)} onMouseEnter={(e) => handleShowTooltip(e, task.notes)} onMouseMove={handleMoveTooltip} onMouseLeave={handleHideTooltip} className={`h-full rounded-md shadow-sm flex items-center w-full group relative cursor-move box-border ${task.isRescheduled ? 'border-2 border-yellow-500' : ''}`} style={{ backgroundColor: task.taskColor || project.color || '#3b82f6' }}>
-                                                        <div className="absolute top-0 left-0 h-full rounded-l-md" style={{width: `${task.completionPercentage || 0}%`, backgroundColor: 'rgba(0,0,0,0.2)'}}></div>
-                                                        <div className="relative z-10 flex items-center justify-between w-full px-2">
-                                                            <span className={`text-sm truncate font-medium ${getContrastingTextColor(task.taskColor || project.color)}`}>{task.name}</span>
-                                                            {task.notes && task.notes.trim() !== '' && ( <StickyNote size={16} className={`flex-shrink-0 ${getContrastingTextColor(task.taskColor || project.color)}`} aria-label="Questa attività ha una nota" /> )}
-                                                        </div>
-                                                        <div draggable onDragStart={(e) => { e.stopPropagation(); handleDragStart(e, task, 'resize-start'); }} className="absolute left-0 top-0 w-2 h-full cursor-ew-resize z-20" />
-                                                        <div draggable onDragStart={(e) => { e.stopPropagation(); handleDragStart(e, task, 'resize-end'); }} className="absolute right-0 top-0 w-2 h-full cursor-ew-resize z-20" />
-                                                    </div>
+                                                  {task.isMilestone ? (
+                                                      <div 
+                                                          draggable 
+                                                          onDragStart={(e) => handleDragStart(e, task, 'move')} 
+                                                          onDoubleClick={() => handleEditTask(task)} 
+                                                          onMouseEnter={(e) => handleShowTooltip(e, `${task.name}${task.notes ? `\n\nNote: ${task.notes}` : ''}`)} 
+                                                          onMouseMove={handleMoveTooltip} 
+                                                          onMouseLeave={handleHideTooltip}
+                                                          className="w-full h-full flex items-center justify-center cursor-move"
+                                                      >
+                                                          <div 
+                                                              className="w-6 h-6 transform rotate-45 shadow-lg" 
+                                                              style={{ backgroundColor: task.taskColor || project.color || '#3b82f6' }}
+                                                          ></div>
+                                                      </div>
+                                                  ) : (
+                                                      <div draggable onDragStart={(e) => handleDragStart(e, task, 'move')} onDoubleClick={() => handleEditTask(task)} onMouseEnter={(e) => handleShowTooltip(e, task.notes)} onMouseMove={handleMoveTooltip} onMouseLeave={handleHideTooltip} className={`h-full rounded-md shadow-sm flex items-center w-full group relative cursor-move box-border ${task.isRescheduled ? 'border-2 border-yellow-500' : ''}`} style={{ backgroundColor: task.taskColor || project.color || '#3b82f6' }}>
+                                                          <div className="absolute top-0 left-0 h-full rounded-l-md" style={{width: `${task.completionPercentage || 0}%`, backgroundColor: 'rgba(0,0,0,0.2)'}}></div>
+                                                          <div className="relative z-10 flex items-center justify-between w-full px-2">
+                                                              <span className={`text-sm truncate font-medium ${getContrastingTextColor(task.taskColor || project.color)}`}>{task.name}</span>
+                                                              {task.notes && task.notes.trim() !== '' && ( <StickyNote size={16} className={`flex-shrink-0 ${getContrastingTextColor(task.taskColor || project.color)}`} aria-label="Questa attività ha una nota" /> )}
+                                                          </div>
+                                                          <div draggable onDragStart={(e) => { e.stopPropagation(); handleDragStart(e, task, 'resize-start'); }} className="absolute left-0 top-0 w-2 h-full cursor-ew-resize z-20" />
+                                                          <div draggable onDragStart={(e) => { e.stopPropagation(); handleDragStart(e, task, 'resize-end'); }} className="absolute right-0 top-0 w-2 h-full cursor-ew-resize z-20" />
+                                                      </div>
+                                                  )}
                                                 </div>
 
                                                 {/* Placeholder for original position */}
