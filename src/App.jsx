@@ -751,12 +751,14 @@ const ExportGanttModal = ({ isOpen, onClose, projects, onExport }) => {
         d.setMonth(d.getMonth() + 1);
         return d.toISOString().split('T')[0];
     });
+    const [expandSidebar, setExpandSidebar] = useState(false);
 
     const handleExport = () => {
         onExport({
             projectId: selectedProjectId,
             startDate: useDateRange ? startDate : null,
             endDate: useDateRange ? endDate : null,
+            expandSidebar: expandSidebar
         });
         onClose();
     };
@@ -791,6 +793,15 @@ const ExportGanttModal = ({ isOpen, onClose, projects, onExport }) => {
                         </div>
                     )}
                 </div>
+
+                <div className="space-y-3">
+                    <label className="flex items-center space-x-2 p-2 rounded-md hover:bg-gray-50 cursor-pointer">
+                        <input type="checkbox" checked={expandSidebar} onChange={(e) => setExpandSidebar(e.target.checked)} className="rounded text-blue-500 h-4 w-4"/>
+                        <span className="font-medium text-gray-700">Espandi nomi attività</span>
+                    </label>
+                     <p className="text-xs text-gray-500 mt-1 pl-3">Aumenta la larghezza della colonna di sinistra per mostrare i nomi completi.</p>
+                </div>
+
 
                 <div className="flex justify-end pt-4 gap-2">
                     <button type="button" onClick={onClose} className="bg-gray-300 text-gray-800 px-4 py-2 rounded-md">Annulla</button>
@@ -1018,7 +1029,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
     
     const importData = async () => { if (!importFile || !userId) return; setIsLoading(true); setLoadingMessage("Importazione in corso..."); const reader = new FileReader(); reader.onload = async (e) => { try { const data = JSON.parse(e.target.result); if (!data.projects || !data.tasks || !data.resources) { throw new Error("Formato file non valido."); } setLoadingMessage("Cancellazione dati esistenti..."); const collectionsToDelete = ['tasks', 'resources', 'projects']; for (const coll of collectionsToDelete) { const userCollRef = collection(db, `users/${userId}/${coll}`); const snapshot = await getDocs(userCollRef); const batch = writeBatch(db); snapshot.docs.forEach(d => batch.delete(d.ref)); await batch.commit(); } setLoadingMessage("Importazione nuovi dati..."); const importBatch = writeBatch(db); data.projects.forEach(p => {const {id, ...rest} = p; importBatch.set(doc(collection(db, `users/${userId}/projects`)), rest)}); data.tasks.forEach(t => {const {id, ...rest} = t; importBatch.set(doc(collection(db, `users/${userId}/tasks`)), rest)}); data.resources.forEach(r => {const {id, ...rest} = r; importBatch.set(doc(collection(db, `users/${userId}/resources`)), rest)}); await importBatch.commit(); setNotification({message: "Importazione completata!", type: "success"}); } catch (error) { console.error("Errore importazione:", error); setNotification({message: `Errore importazione: ${error.message}`, type: "error"}); } finally { setIsLoading(false); setImportFile(null); setIsImportConfirmOpen(false); } }; reader.readAsText(importFile); };
     
-    const handleExportGantt = ({ projectId, startDate, endDate }) => {
+    const handleExportGantt = ({ projectId, startDate, endDate, expandSidebar }) => {
         setLoadingMessage('Generazione anteprima di stampa...');
         setIsLoading(true);
 
@@ -1031,7 +1042,9 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
                 arrowPaths,
                 ganttHeight,
                 ganttWidth,
-                todayMarkerPosition
+                todayMarkerPosition,
+                sidebarWidth,
+                expandSidebar
             } = exportData;
 
             const sidebarHTML = projectsToRender.map(p => `
@@ -1040,14 +1053,14 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
                         <div class="flex items-center gap-3 flex-grow overflow-hidden">
                             <span class="w-4 h-4 rounded-full flex-shrink-0" style="background-color: ${p.color};"></span>
                             <div class="flex-grow overflow-hidden">
-                                <h3 class="font-bold text-gray-800 truncate">${p.name}</h3>
+                                <h3 class="font-bold text-gray-800 ${!expandSidebar ? 'truncate' : ''}">${p.name}</h3>
                             </div>
                         </div>
                     </div>
                     ${p.tasks.map(t => `
                         <div class="flex items-center p-2 pl-4 bg-gray-50" style="height: ${ROW_HEIGHT}px; border-bottom: 1px solid #e5e7eb; border-right: 1px solid #e5e7eb;">
                             <div class="flex-grow overflow-hidden">
-                                <p class="font-medium text-gray-900 truncate">${t.name}</p>
+                                <p class="font-medium text-gray-900 ${!expandSidebar ? 'truncate' : ''}">${t.name}</p>
                             </div>
                         </div>
                     `).join('')}
@@ -1086,7 +1099,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
                 </head>
                 <body class="p-4">
                     <h1 class="text-2xl font-bold mb-4">Gantt - ${new Date().toLocaleDateString('it-IT')}</h1>
-                    <div class="grid shadow-lg border border-gray-200" style="grid-template-columns: ${SIDEBAR_WIDTH}px 1fr; width: ${ganttWidth}px; min-width: 100%;">
+                    <div class="grid shadow-lg border border-gray-200" style="grid-template-columns: ${sidebarWidth}px 1fr; width: ${ganttWidth}px; min-width: 100%;">
                         <!-- Sidebar -->
                         <div class="bg-gray-50" style="z-index: 20;">
                             <div class="flex items-center justify-between px-4 bg-gray-100" style="height: ${GANTT_HEADER_HEIGHT}px; border-bottom: 1px solid #e5e7eb; border-right: 1px solid #e5e7eb;">
@@ -1209,6 +1222,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
             today.setHours(0,0,0,0);
             const todayMarkerPosition = calculateDaysDifference(exportDateHeaders[0], today) * DAY_WIDTH;
 
+            const printSidebarWidth = expandSidebar ? 500 : SIDEBAR_WIDTH;
 
             const exportData = {
                 projectsToRender,
@@ -1217,8 +1231,10 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
                 taskPositions: exportTaskPositions,
                 arrowPaths: exportArrowPaths,
                 ganttHeight: currentY,
-                ganttWidth: SIDEBAR_WIDTH + exportDateHeaders.length * DAY_WIDTH,
-                todayMarkerPosition
+                ganttWidth: printSidebarWidth + exportDateHeaders.length * DAY_WIDTH,
+                todayMarkerPosition,
+                sidebarWidth: printSidebarWidth,
+                expandSidebar
             };
 
             const htmlContent = generateGanttExportHTML(exportData);
