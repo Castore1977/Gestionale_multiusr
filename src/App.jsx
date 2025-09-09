@@ -1520,7 +1520,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
                         <div className="grid" style={{ gridTemplateColumns: `${SIDEBAR_WIDTH}px 1fr`, width: `${SIDEBAR_WIDTH + dateHeaders.length * DAY_WIDTH}px` }}>
                             {/* Colonna Sinistra (Sidebar) */}
                             <div className="sticky left-0 z-20 bg-gray-50">
-                                <div className="sticky top-0 z-10 flex items-center justify-between px-4 border-b border-r bg-gray-100" style={{height: `${GANTT_HEADER_HEIGHT}px`}}><span className="font-semibold text-gray-700">Progetti Attivi</span><button onClick={() => setIsExportModalOpen(true)} className="text-blue-600 hover:text-blue-800 p-1" title="Esporta Gantt per la stampa"><FileDown size={18}/></button></div>
+                                <div className="sticky top-0 z-30 flex items-center justify-between px-4 border-b border-r bg-gray-100" style={{height: `${GANTT_HEADER_HEIGHT}px`}}><span className="font-semibold text-gray-700">Progetti Attivi</span><button onClick={() => setIsExportModalOpen(true)} className="text-blue-600 hover:text-blue-800 p-1" title="Esporta Gantt per la stampa"><FileDown size={18}/></button></div>
                                 {projectsWithData.map(project => (
                                     <div key={project.id} className="group/project">
                                         <div onClick={() => setSelectedProjectId(project.id)} className={`flex items-center justify-between p-2 px-4 cursor-pointer transition-all border-b border-r ${selectedProjectId === project.id ? 'bg-blue-200 border-l-4 border-blue-600' : 'bg-white'}`} style={{height: `${PROJECT_HEADER_HEIGHT}px`}}>
@@ -1533,17 +1533,17 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
                                         </div>
                                         {project.tasks.map(task => (
                                             <div key={task.id} 
-                                                 draggable
-                                                 onDragStart={(e) => handleTaskDragStart(e, task)}
-                                                 onDragEnter={(e) => handleTaskDragEnter(e, task)}
-                                                 onDragEnd={handleTaskDrop}
-                                                 onDragOver={(e) => e.preventDefault()}
-                                                 className="flex items-center group/task p-2 pl-4 border-b border-r bg-gray-50 cursor-grab active:cursor-grabbing" 
-                                                 style={{height: `${ROW_HEIGHT}px`}} 
-                                                 onDoubleClick={() => handleEditTask(task)}>
+                                                draggable
+                                                onDragStart={(e) => handleTaskDragStart(e, task)}
+                                                onDragEnter={(e) => handleTaskDragEnter(e, task)}
+                                                onDragEnd={handleTaskDrop}
+                                                onDragOver={(e) => e.preventDefault()}
+                                                className="flex items-center group/task p-2 pl-4 border-b border-r bg-gray-50 cursor-grab active:cursor-grabbing" 
+                                                style={{height: `${ROW_HEIGHT}px`}} 
+                                                onDoubleClick={() => handleEditTask(task)}>
                                                 <GripVertical className="flex-shrink-0 text-gray-400 mr-2" size={16} />
                                                 <div className="flex-grow overflow-hidden">
-                                                    <p className="font-medium text-gray-900 truncate" onMouseEnter={(e) => handleShowTooltip(e, task.name)} onMouseMove={handleMoveTooltip} onMouseLeave={handleHideTooltip}>
+                                                    <p className="font-medium text-gray-900 truncate" onMouseEnter={(e) => handleShowTooltip(e, `${task.name}${task.notes ? `\n\nNote: ${task.notes}` : ''}`)} onMouseMove={handleMoveTooltip} onMouseLeave={handleHideTooltip}>
                                                         {task.name}
                                                         <span className={`ml-1 font-normal ${task.completionPercentage >= 100 ? 'text-green-600' : 'text-gray-500'}`}>
                                                             ({task.completionPercentage || 0}%)
@@ -1560,7 +1560,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
                             </div>
                             {/* Colonna Destra (Timeline) */}
                             <div className="relative">
-                                <div className="sticky top-0 z-10 flex flex-col bg-white border-b" style={{height: `${GANTT_HEADER_HEIGHT}px`}}>
+                                <div className="sticky top-0 z-30 flex flex-col bg-white border-b" style={{height: `${GANTT_HEADER_HEIGHT}px`}}>
                                     {/* Riga Mesi */}
                                     <div className="flex border-b">
                                         {monthHeaders.map((month, index) => (
@@ -1664,8 +1664,8 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
                                         );
                                     }))}
                                     <svg width="100%" height="100%" className="absolute top-0 left-0 z-10 pointer-events-none">
-                                      <defs> <marker id="arrowhead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"> <path d="M 0 0 L 10 5 L 0 10 z" fill="#0ea5e9" /> </marker> </defs>
-                                      {arrowPaths.map(path => (<path key={path.id} d={path.d} stroke="#0ea5e9" strokeWidth="2" fill="none" markerEnd="url(#arrowhead)" />))}
+                                        <defs> <marker id="arrowhead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"> <path d="M 0 0 L 10 5 L 0 10 z" fill="#0ea5e9" /> </marker> </defs>
+                                        {arrowPaths.map(path => (<path key={path.id} d={path.d} stroke="#0ea5e9" strokeWidth="2" fill="none" markerEnd="url(#arrowhead)" />))}
                                     </svg>
                                 </div>
                             </div>
@@ -1825,7 +1825,7 @@ export default function App() {
                      <p className="text-gray-500 mt-2 text-sm">Assicurati che le credenziali per l'ambiente siano state fornite correttamente.</p>
                  </div>
              </div>
-        );
+         );
     }
 
 
