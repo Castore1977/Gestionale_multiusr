@@ -1177,9 +1177,9 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
                                     ${dateHeaders.map(d => {
                                         const isToday = d.toDateString() === new Date().toDateString();
                                         return `<div class="w-10 text-center border-r flex-shrink-0 flex flex-col justify-center ${isToday ? 'bg-red-200' : 'bg-gray-50'}" style="height: 48px;">
-                                                    <div class="text-xs ${d.getDay() === 0 || d.getDay() === 6 ? 'text-red-500' : 'text-gray-500'}">${['D', 'L', 'M', 'M', 'G', 'V', 'S'][d.getDay()]}</div>
-                                                    <div class="text-sm font-semibold ${isToday ? 'text-red-600' : 'text-gray-800'}">${d.getDate()}</div>
-                                                </div>`
+                                                <div class="text-xs ${d.getDay() === 0 || d.getDay() === 6 ? 'text-red-500' : 'text-gray-500'}">${['D', 'L', 'M', 'M', 'G', 'V', 'S'][d.getDay()]}</div>
+                                                <div class="text-sm font-semibold ${isToday ? 'text-red-600' : 'text-gray-800'}">${d.getDate()}</div>
+                                            </div>`
                                     }).join('')}
                                 </div>
                             </div>
@@ -1519,7 +1519,7 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
                     <div className="h-full w-full overflow-auto" ref={ganttContainerRef} onDrop={handleGanttDrop} onDragOver={e => e.preventDefault()}>
                         <div className="grid" style={{ gridTemplateColumns: `${SIDEBAR_WIDTH}px 1fr`, width: `${SIDEBAR_WIDTH + dateHeaders.length * DAY_WIDTH}px` }}>
                             {/* Colonna Sinistra (Sidebar) */}
-                            <div className="sticky left-0 z-20 bg-gray-50">
+                            <div className="sticky left-0 z-40 bg-gray-50">
                                 <div className="sticky top-0 z-30 flex items-center justify-between px-4 border-b border-r bg-gray-100" style={{height: `${GANTT_HEADER_HEIGHT}px`}}><span className="font-semibold text-gray-700">Progetti Attivi</span><button onClick={() => setIsExportModalOpen(true)} className="text-blue-600 hover:text-blue-800 p-1" title="Esporta Gantt per la stampa"><FileDown size={18}/></button></div>
                                 {projectsWithData.map(project => (
                                     <div key={project.id} className="group/project">
@@ -1587,32 +1587,32 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
 
                                                 {/* Main task bar container */}
                                                 <div className="absolute flex items-center" style={{ top: `16px`, height: `32px`, left: `${pos.left}px`, width: `${pos.width}px`, pointerEvents: 'auto', zIndex: 10 }}>
-                                                  {task.isMilestone ? (
-                                                      <div 
-                                                          draggable 
-                                                          onDragStart={(e) => handleDragStart(e, task, 'move')} 
-                                                          onDoubleClick={() => handleEditTask(task)} 
-                                                          onMouseEnter={(e) => handleShowTooltip(e, `${task.name}${task.notes ? `\n\nNote: ${task.notes}` : ''}`)} 
-                                                          onMouseMove={handleMoveTooltip} 
-                                                          onMouseLeave={handleHideTooltip}
-                                                          className="w-full h-full flex items-center justify-center cursor-move"
-                                                      >
-                                                          <div 
-                                                              className="w-6 h-6 transform rotate-45 shadow-lg" 
-                                                              style={{ backgroundColor: task.taskColor || project.color || '#3b82f6' }}
-                                                          ></div>
-                                                      </div>
-                                                  ) : (
-                                                      <div draggable onDragStart={(e) => handleDragStart(e, task, 'move')} onDoubleClick={() => handleEditTask(task)} onMouseEnter={(e) => handleShowTooltip(e, task.notes)} onMouseMove={handleMoveTooltip} onMouseLeave={handleHideTooltip} className={`h-full rounded-md shadow-sm flex items-center w-full group relative cursor-move box-border ${task.isRescheduled ? 'border-2 border-yellow-500' : ''}`} style={{ backgroundColor: task.taskColor || project.color || '#3b82f6' }}>
-                                                          <div className="absolute top-0 left-0 h-full rounded-l-md" style={{width: `${task.completionPercentage || 0}%`, backgroundColor: 'rgba(0,0,0,0.2)'}}></div>
-                                                          <div className="relative z-10 flex items-center justify-between w-full px-2">
-                                                              <span className={`text-sm truncate font-medium ${getContrastingTextColor(task.taskColor || project.color)}`}>{task.name}</span>
-                                                              {task.notes && task.notes.trim() !== '' && ( <StickyNote size={16} className={`flex-shrink-0 ${getContrastingTextColor(task.taskColor || project.color)}`} aria-label="Questa attività ha una nota" /> )}
-                                                          </div>
-                                                          <div draggable onDragStart={(e) => { e.stopPropagation(); handleDragStart(e, task, 'resize-start'); }} className="absolute left-0 top-0 w-2 h-full cursor-ew-resize z-20" />
-                                                          <div draggable onDragStart={(e) => { e.stopPropagation(); handleDragStart(e, task, 'resize-end'); }} className="absolute right-0 top-0 w-2 h-full cursor-ew-resize z-20" />
-                                                      </div>
-                                                  )}
+                                                    {task.isMilestone ? (
+                                                        <div 
+                                                            draggable 
+                                                            onDragStart={(e) => handleDragStart(e, task, 'move')} 
+                                                            onDoubleClick={() => handleEditTask(task)} 
+                                                            onMouseEnter={(e) => handleShowTooltip(e, `${task.name}${task.notes ? `\n\nNote: ${task.notes}` : ''}`)} 
+                                                            onMouseMove={handleMoveTooltip} 
+                                                            onMouseLeave={handleHideTooltip}
+                                                            className="w-full h-full flex items-center justify-center cursor-move"
+                                                        >
+                                                            <div 
+                                                                className="w-6 h-6 transform rotate-45 shadow-lg" 
+                                                                style={{ backgroundColor: task.taskColor || project.color || '#3b82f6' }}
+                                                            ></div>
+                                                        </div>
+                                                    ) : (
+                                                        <div draggable onDragStart={(e) => handleDragStart(e, task, 'move')} onDoubleClick={() => handleEditTask(task)} onMouseEnter={(e) => handleShowTooltip(e, task.notes)} onMouseMove={handleMoveTooltip} onMouseLeave={handleHideTooltip} className={`h-full rounded-md shadow-sm flex items-center w-full group relative cursor-move box-border ${task.isRescheduled ? 'border-2 border-yellow-500' : ''}`} style={{ backgroundColor: task.taskColor || project.color || '#3b82f6' }}>
+                                                            <div className="absolute top-0 left-0 h-full rounded-l-md" style={{width: `${task.completionPercentage || 0}%`, backgroundColor: 'rgba(0,0,0,0.2)'}}></div>
+                                                            <div className="relative z-10 flex items-center justify-between w-full px-2">
+                                                                <span className={`text-sm truncate font-medium ${getContrastingTextColor(task.taskColor || project.color)}`}>{task.name}</span>
+                                                                {task.notes && task.notes.trim() !== '' && ( <StickyNote size={16} className={`flex-shrink-0 ${getContrastingTextColor(task.taskColor || project.color)}`} aria-label="Questa attività ha una nota" /> )}
+                                                            </div>
+                                                            <div draggable onDragStart={(e) => { e.stopPropagation(); handleDragStart(e, task, 'resize-start'); }} className="absolute left-0 top-0 w-2 h-full cursor-ew-resize z-20" />
+                                                            <div draggable onDragStart={(e) => { e.stopPropagation(); handleDragStart(e, task, 'resize-end'); }} className="absolute right-0 top-0 w-2 h-full cursor-ew-resize z-20" />
+                                                        </div>
+                                                    )}
                                                 </div>
 
                                                 {/* Placeholder for original position */}
@@ -1677,12 +1677,12 @@ const MainDashboard = ({ projects, tasks, resources, db, userId, auth, notificat
                 : ( <ActivityReportView projectsWithData={projectsWithData} onExportPDF={() => handleExportReport('activity')} /> )
                 }
             </main>
-             <Modal isOpen={isTaskModalOpen} onClose={() => {setEditingTask(null); setIsTaskModalOpen(false);}} title={editingTask ? 'Modifica Attività' : 'Nuova Attività'}> <TaskForm db={db} userId={userId} projects={activeProjects} task={editingTask} resources={resources} allTasks={tasks} onDone={() => {setEditingTask(null); setIsTaskModalOpen(false);}} selectedProjectIdForNew={selectedProjectId} /> </Modal>
-             <Modal isOpen={isResourceModalOpen} onClose={() => setIsResourceModalOpen(false)} title="Gestione Risorse"> <ResourceManagement resources={resources} db={db} userId={userId}/> </Modal>
-             <Modal isOpen={isProjectModalOpen} onClose={() => {setEditingProject(null); setIsProjectModalOpen(false);}} title={editingProject && editingProject.id ? 'Modifica Progetto' : 'Nuovo Progetto'}> <ProjectForm project={editingProject} onDone={() => {setEditingProject(null); setIsProjectModalOpen(false);}} db={db} userId={userId} /> </Modal>
-             <Modal isOpen={!!itemToDelete} onClose={() => setItemToDelete(null)} title="Conferma Eliminazione"> <div><div className="p-4 bg-red-100 border-l-4 border-red-500 text-red-700"> <p className="font-bold">ATTENZIONE!</p><p>Stai per eliminare {itemToDelete?.type === 'project' ? `il progetto "${itemToDelete.item.name}" e tutte le sue attività` : `l'attività "${itemToDelete?.item.name}"`}. Questa azione è irreversibile.</p></div> <div className="flex justify-end mt-4 gap-2"> <button onClick={() => setItemToDelete(null)} className="bg-gray-300 px-4 py-2 rounded-md">Annulla</button> <button onClick={handleDeleteItem} className="bg-red-600 text-white px-4 py-2 rounded-md">Elimina</button></div></div></Modal>
-             <Modal isOpen={isImportConfirmOpen} onClose={() => setIsImportConfirmOpen(false)} title="Conferma Importazione"> <div><div className="p-4 bg-red-100 border-l-4 border-red-500 text-red-700"> <p className="font-bold">ATTENZIONE!</p><p>Stai per sovrascrivere tutti i tuoi dati con il contenuto del file. Questa azione è irreversibile. Sei sicuro?</p></div> <div className="flex justify-end mt-4 gap-2"> <button onClick={() => setIsImportConfirmOpen(false)} className="bg-gray-300 px-4 py-2 rounded-md">Annulla</button> <button onClick={importData} className="bg-red-600 text-white px-4 py-2 rounded-md">Sì, sovrascrivi</button></div></div></Modal>
-             <ExportGanttModal isOpen={isExportModalOpen} onClose={() => setIsExportModalOpen(false)} projects={activeProjects} onExport={handleExportGantt} />
+            <Modal isOpen={isTaskModalOpen} onClose={() => {setEditingTask(null); setIsTaskModalOpen(false);}} title={editingTask ? 'Modifica Attività' : 'Nuova Attività'}> <TaskForm db={db} userId={userId} projects={activeProjects} task={editingTask} resources={resources} allTasks={tasks} onDone={() => {setEditingTask(null); setIsTaskModalOpen(false);}} selectedProjectIdForNew={selectedProjectId} /> </Modal>
+            <Modal isOpen={isResourceModalOpen} onClose={() => setIsResourceModalOpen(false)} title="Gestione Risorse"> <ResourceManagement resources={resources} db={db} userId={userId}/> </Modal>
+            <Modal isOpen={isProjectModalOpen} onClose={() => {setEditingProject(null); setIsProjectModalOpen(false);}} title={editingProject && editingProject.id ? 'Modifica Progetto' : 'Nuovo Progetto'}> <ProjectForm project={editingProject} onDone={() => {setEditingProject(null); setIsProjectModalOpen(false);}} db={db} userId={userId} /> </Modal>
+            <Modal isOpen={!!itemToDelete} onClose={() => setItemToDelete(null)} title="Conferma Eliminazione"> <div><div className="p-4 bg-red-100 border-l-4 border-red-500 text-red-700"> <p className="font-bold">ATTENZIONE!</p><p>Stai per eliminare {itemToDelete?.type === 'project' ? `il progetto "${itemToDelete.item.name}" e tutte le sue attività` : `l'attività "${itemToDelete?.item.name}"`}. Questa azione è irreversibile.</p></div> <div className="flex justify-end mt-4 gap-2"> <button onClick={() => setItemToDelete(null)} className="bg-gray-300 px-4 py-2 rounded-md">Annulla</button> <button onClick={handleDeleteItem} className="bg-red-600 text-white px-4 py-2 rounded-md">Elimina</button></div></div></Modal>
+            <Modal isOpen={isImportConfirmOpen} onClose={() => setIsImportConfirmOpen(false)} title="Conferma Importazione"> <div><div className="p-4 bg-red-100 border-l-4 border-red-500 text-red-700"> <p className="font-bold">ATTENZIONE!</p><p>Stai per sovrascrivere tutti i tuoi dati con il contenuto del file. Questa azione è irreversibile. Sei sicuro?</p></div> <div className="flex justify-end mt-4 gap-2"> <button onClick={() => setIsImportConfirmOpen(false)} className="bg-gray-300 px-4 py-2 rounded-md">Annulla</button> <button onClick={importData} className="bg-red-600 text-white px-4 py-2 rounded-md">Sì, sovrascrivi</button></div></div></Modal>
+            <ExportGanttModal isOpen={isExportModalOpen} onClose={() => setIsExportModalOpen(false)} projects={activeProjects} onExport={handleExportGantt} />
         </div>
     );
 };
@@ -1817,15 +1817,15 @@ export default function App() {
     }
     
     if (!auth || !db) {
-         return (
-             <div className="h-screen w-screen flex flex-col justify-center items-center bg-gray-100 p-4">
-                 <div className="max-w-md w-full bg-white shadow-md rounded-lg p-8 text-center">
-                     <h2 className="text-2xl font-bold text-red-600 mb-4">Errore di Configurazione</h2>
-                     <p className="text-gray-700">La configurazione di Firebase non è stata caricata correttamente.</p>
-                     <p className="text-gray-500 mt-2 text-sm">Assicurati che le credenziali per l'ambiente siano state fornite correttamente.</p>
-                 </div>
-             </div>
-         );
+          return (
+              <div className="h-screen w-screen flex flex-col justify-center items-center bg-gray-100 p-4">
+                  <div className="max-w-md w-full bg-white shadow-md rounded-lg p-8 text-center">
+                      <h2 className="text-2xl font-bold text-red-600 mb-4">Errore di Configurazione</h2>
+                      <p className="text-gray-700">La configurazione di Firebase non è stata caricata correttamente.</p>
+                      <p className="text-gray-500 mt-2 text-sm">Assicurati che le credenziali per l'ambiente siano state fornite correttamente.</p>
+                  </div>
+              </div>
+          );
     }
 
 
